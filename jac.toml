@@ -2,7 +2,7 @@
 name = "empty"
 version = "0.0.1"
 description = "Empty Jac project - start from scratch"
-entry-point = "main.jac"
+entry-point = "main"
 kind = "web-app"
 
 [byllm]
@@ -19,10 +19,15 @@ font = "jetbrains-mono"
 radius = "large"
 menuAccent = "bold"
 menuColor = "default"
-[dependencies]
+[dependencies.pypi]
 # Floor plan import: DXF (AutoCAD) and PDF/image conversion
 ezdxf = ">=1.1.0"
 pymupdf = ">=1.24.0"
+# Line cleanup for imported raster plans
+pillow = ">=10.0.0"
+numpy = ">=1.26.0"
+# Room detection for "Suggest wiring"
+opencv-python-headless = ">=4.10.0"
 
 [dependencies.npm]
 "@fontsource-variable/jetbrains-mono" = "*"
@@ -65,7 +70,7 @@ tailwindcss = "4.3.3"
 
 
 
-[dev-dependencies]
+[dev-dependencies.pypi]
 watchdog = ">=3.0.0"
 
 [serve]
@@ -88,9 +93,6 @@ og_description = "A minimal jac-shadcn starter."
 og_site_name = "Blank canvas"
 
 
-[scale]
-[scale.microservices]
-enabled = false
 
 [jacpack]
 name = 'wirewise-ai-editor'

@@ -1,0 +1,60 @@
+{
+  "_purpose": "Appliance loads for the Appliances step (AC, pump, hot water, washing machine, custom loads). Watts and pf come from rule-profile.json when it has them (profile_load / template); everything else is a typical nameplate value the user can edit when adding the load.",
+  "_items_source": "unverified — typical nameplate rating, not from BS 7671 or the rule profile; the user's value overrides",
+  "ac_sizing": {
+    "btu_per_m2": 700,
+    "unit_sizes_btu": [9000, 12000, 18000, 24000],
+    "exclude_room_types": ["bathroom", "wc", "kitchen", "living"],
+    "_source": "unverified — tropical rule of thumb (Sri Lankan sizing guides quote about 600–900 BTU/m² for a 2.7 m ceiling); a heat-load calculation overrides it. Unit power comes from rule-profile typical_loads_w."
+  },
+  "categories": [
+    {
+      "id": "cooling",
+      "name": "Cooling & air",
+      "items": [
+        { "id": "ac_9000", "name": "Air conditioner 9,000 BTU", "tag": "AC", "profile_load": "AC_9000_BTU", "template": "AC_DEDICATED", "outlet": "20 A AC outlet (high level)", "demand": "AC" },
+        { "id": "ac_12000", "name": "Air conditioner 12,000 BTU", "tag": "AC", "profile_load": "AC_12000_BTU", "template": "AC_DEDICATED", "outlet": "20 A AC outlet (high level)", "demand": "AC" },
+        { "id": "ac_18000", "name": "Air conditioner 18,000 BTU", "tag": "AC", "profile_load": "AC_18000_BTU", "template": "AC_DEDICATED", "outlet": "20 A AC outlet (high level)", "demand": "AC" },
+        { "id": "ac_24000", "name": "Air conditioner 24,000 BTU", "tag": "AC", "profile_load": "AC_24000_BTU", "template": "AC_DEDICATED", "outlet": "20 A AC outlet (high level)", "demand": "AC" },
+        { "id": "ceiling_fan", "name": "Ceiling fan", "tag": "FAN", "profile_load": "FAN", "pf": 1.0, "curve": "B", "min_device_a": 6, "outlet": "Fan regulator by the door", "demand": "FAN", "ceiling": true },
+        { "id": "exhaust_fan", "name": "Exhaust fan", "tag": "EXF", "watts": 40, "pf": 1.0, "curve": "B", "min_device_a": 6, "outlet": "Fused spur (switched)", "demand": "FAN" }
+      ]
+    },
+    {
+      "id": "water",
+      "name": "Water & pumps",
+      "items": [
+        { "id": "water_heater_instant", "name": "Instant water heater 4.5 kW", "tag": "WH", "profile_load": "WATER_HEATER_INSTANT", "template": "WATER_HEATER_INSTANT", "outlet": "45 A double-pole switch (outside the bathroom)", "demand": "WATER_HEATER_INSTANT" },
+        { "id": "water_heater_storage", "name": "Storage water heater 3 kW", "tag": "WH", "profile_load": "WATER_HEATER_STORAGE", "template": "WATER_HEATER_STORAGE", "outlet": "20 A double-pole switch (outside the bathroom)", "demand": "WATER_HEATER_STORAGE" },
+        { "id": "pump_0_5hp", "name": "Water pump 0.5 HP", "tag": "PUMP", "watts": 373, "pf": 0.8, "curve": "C", "min_device_a": 10, "motor": true, "outlet": "20 A DP switch + pump outlet", "demand": "DEDICATED" },
+        { "id": "pump_1hp", "name": "Water pump 1 HP", "tag": "PUMP", "watts": 746, "pf": 0.8, "curve": "C", "min_device_a": 10, "motor": true, "outlet": "20 A DP switch + pump outlet", "demand": "DEDICATED" },
+        { "id": "pump_1_5hp", "name": "Water pump 1.5 HP", "tag": "PUMP", "watts": 1119, "pf": 0.8, "curve": "C", "min_device_a": 16, "motor": true, "outlet": "20 A DP switch + pump outlet", "demand": "DEDICATED" }
+      ]
+    },
+    {
+      "id": "kitchen",
+      "name": "Kitchen & laundry",
+      "items": [
+        { "id": "washing_machine", "name": "Washing machine", "tag": "WM", "watts": 2200, "template": "SOCKET_RADIAL_20", "outlet": "13 A switched socket (dedicated)", "demand": "DEDICATED" },
+        { "id": "refrigerator", "name": "Refrigerator", "tag": "FRG", "watts": 200, "pf": 0.9, "curve": "B", "outlet": "13 A socket (dedicated)", "demand": "DEDICATED" },
+        { "id": "microwave", "name": "Microwave oven", "tag": "MW", "watts": 1200, "pf": 1.0, "curve": "B", "outlet": "13 A socket", "demand": "DEDICATED" },
+        { "id": "induction_hob", "name": "Induction cooker", "tag": "IND", "watts": 2000, "pf": 1.0, "curve": "B", "outlet": "13 A socket (dedicated)", "demand": "DEDICATED" },
+        { "id": "cooker", "name": "Electric cooker / oven", "tag": "CKR", "watts": 6000, "template": "COOKER", "outlet": "45 A cooker control unit", "demand": "COOKER" },
+        { "id": "rice_cooker", "name": "Rice cooker", "tag": "RC", "watts": 700, "pf": 1.0, "curve": "B", "outlet": "13 A socket", "demand": "DEDICATED" },
+        { "id": "kettle", "name": "Electric kettle", "tag": "KT", "watts": 2000, "pf": 1.0, "curve": "B", "outlet": "13 A socket", "demand": "DEDICATED" },
+        { "id": "water_dispenser", "name": "Water dispenser", "tag": "WD", "watts": 500, "pf": 1.0, "curve": "B", "outlet": "13 A socket", "demand": "DEDICATED" },
+        { "id": "iron", "name": "Clothes iron", "tag": "IRN", "watts": 1200, "pf": 1.0, "curve": "B", "outlet": "13 A socket", "demand": "DEDICATED" }
+      ]
+    },
+    {
+      "id": "living",
+      "name": "Living, office & network",
+      "items": [
+        { "id": "tv", "name": "Television", "tag": "TV", "watts": 150, "pf": 0.9, "curve": "B", "outlet": "13 A twin socket (TV wall)", "demand": "DEDICATED" },
+        { "id": "computer", "name": "Desktop computer", "tag": "PC", "watts": 300, "pf": 0.9, "curve": "B", "outlet": "13 A twin socket (desk)", "demand": "DEDICATED" },
+        { "id": "router", "name": "Wi-Fi router / network", "tag": "NET", "watts": 20, "pf": 0.9, "curve": "B", "outlet": "13 A socket (high level)", "demand": "DEDICATED" },
+        { "id": "cctv", "name": "CCTV recorder", "tag": "CCTV", "watts": 60, "pf": 0.9, "curve": "B", "outlet": "13 A socket (high level)", "demand": "DEDICATED" }
+      ]
+    }
+  ]
+}

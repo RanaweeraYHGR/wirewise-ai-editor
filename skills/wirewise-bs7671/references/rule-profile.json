@@ -1,0 +1,532 @@
+{
+  "profile_id": "bs7671-2018-a4-2026-lk-domestic-demo",
+  "standard": "BS 7671:2018+A4:2026",
+  "status": "DEMO — check every 'unverified' or 'secondary' value against BS 7671 A4 / On-Site Guide 9th Ed before real use",
+  "_tags": {
+    "verified_current": "official current source (IET / BSI / NICEIC / PUCSL / CEB regs)",
+    "verified_2008_guide": "ECA Guide to the Wiring Regulations (17th Ed, 2008) — concept OK, value may have changed",
+    "secondary": "non-official site or manufacturer datasheet that quotes BS 7671 — likely right, not authoritative",
+    "unverified": "model knowledge only"
+  },
+  "supply": {
+    "voltage_v": 230,
+    "voltage_tolerance_pct": 6,
+    "frequency_hz": 50,
+    "frequency_tolerance_pct": 1,
+    "phases": 1,
+    "_source_supply": "verified_current — Sri Lanka Electricity (Safety, Quality & Continuity) Regulations 2016, Reg 50",
+    "earthing_system": "TT",
+    "_source_earthing": "verified (Sri Lankan source) — Univ. of Moratuwa EE101 notes: 'The TT System of earthing is the one used in Sri Lanka'. Still a project input; SQCR Reg 64 lets the consumer ask the licensee (CEB/LECO) for earthing type and external Ze.",
+    "ze_ohm": null,
+    "pfc_ka": null,
+    "_note": "ze/pfc are project inputs; null => WARNING",
+    "_uk_typical_ze_ohm": {
+      "TN-C-S": 0.35,
+      "TN-S": 0.8,
+      "TT": 21,
+      "_source": "verified_2008_guide Table C4.7 (UK values)"
+    }
+  },
+  "voltage_drop_limit_pct": {
+    "lighting": 3,
+    "other": 5,
+    "private_supply_lighting": 6,
+    "private_supply_other": 8,
+    "_source": "verified_2008_guide Table C4.5"
+  },
+  "disconnection_time_s": {
+    "TN_final": 0.4,
+    "TN_distribution": 5,
+    "TT_final": 0.2,
+    "TT_distribution": 1,
+    "_source": "verified_2008_guide Table C4.6"
+  },
+  "tt": {
+    "touch_voltage_limit_v": 50,
+    "rule": "RA x IΔn <= 50 V",
+    "max_recommended_electrode_ohm": 200,
+    "ra_max_ohm_for_30ma_theoretical": 1667,
+    "_source": "RA x IΔn <= 50 V (411.5.3) and 200 ohm note: verified_2008_guide D7.5; 1667 ohm: secondary (squote); UoM notes say Sri Lankan electrodes may exceed 100 ohm",
+    "single_rcd_at_origin_needs_class_ii_upstream": true,
+    "_source_origin": "verified_2008_guide D7.5 (531.4.1)"
+  },
+  "rcd": {
+    "additional_protection_ma": 30,
+    "required_for": {
+      "SOCKET_LE_32A": "18th Ed: sockets <= 32 A, no risk-assessment exception for dwellings — secondary (IET 18th Ed impact paper, draft stage); 2008 was <= 20 A (verified_2008_guide D7.1)",
+      "BATHROOM_ALL": "verified_2008_guide (701.411.3.3)",
+      "CONCEALED_LT_50MM": "verified_2008_guide D7.1; 18th Ed reg no. 522.6.202/203 unverified",
+      "LIGHTING_DOMESTIC": "secondary — IET 18th Ed impact paper (411.3.4, draft stage)"
+    },
+    "design_max_standing_leakage_pct_of_idn": 25,
+    "leakage_rules_of_thumb_ma": {
+      "smps_device": 1,
+      "appliance_le_3kw": 3,
+      "appliance_le_6kw": 6
+    },
+    "max_double_sockets_per_circuit_recommended": 10,
+    "types": {
+      "AC": "sinusoidal AC only",
+      "A": "AC + pulsating DC",
+      "B": "AC + pulsating + smooth DC (needed for PV/EV grid side)"
+    },
+    "_source_design": "verified_2008_guide D7.3, D7.4; Type B for PV/BESS: verified_current (PUCSL RTSPV-BESS framework)"
+  },
+  "device_ratings_a": [
+    6,
+    10,
+    16,
+    20,
+    25,
+    32,
+    40,
+    50,
+    63
+  ],
+  "mcb_i2_multiplier": {
+    "value": 1.45,
+    "_source": "verified_2008_guide Table C4.1"
+  },
+  "mcb_ambient_derating": {
+    "40": 0.85,
+    "50": 0.75,
+    "60": 0.65,
+    "_source": "verified_2008_guide D6.3 (indicative; use manufacturer data)"
+  },
+  "mcb_breaking_capacity_ka_typical_domestic": {
+    "value": 6,
+    "_source": "verified_2008_guide C4.4.4"
+  },
+  "max_zs_ohm": {
+    "_rule": "Zs_max = Cmin x U0 / Ia, Cmin = 0.95 (verified_current: IET Wiring Matters 2023). 18th Ed values = 2008 values x 0.95.",
+    "type_b": {
+      "6": 7.28,
+      "10": 4.37,
+      "16": 2.73,
+      "20": 2.19,
+      "25": 1.75,
+      "32": 1.37,
+      "40": 1.09,
+      "50": 0.87,
+      "63": 0.69,
+      "_source": "32A = 1.37 verified_current (IET); 6/16/20/32 secondary (squote, A4); all = 2008 Table 41.3 (verified_2008_guide App 3: 7.67/4.60/2.87/2.30/1.84/1.44/1.15/0.92/0.73) x 0.95"
+    },
+    "type_c": {
+      "6": 3.64,
+      "10": 2.19,
+      "16": 1.37,
+      "20": 1.09,
+      "25": 0.87,
+      "32": 0.68,
+      "40": 0.54,
+      "_source": "6/16/20/32 secondary (squote); all = 2008 Table 41.3 x 0.95"
+    },
+    "measured_factor": 0.8,
+    "_source_measured": "0.8 factor for measured Zs: verified_current (IET Wiring Matters 2023, Appendix 3) + verified_2008_guide C4.6.4"
+  },
+  "r1_r2_mohm_per_m_20c": {
+    "_type": "twin & earth to BS 6004 (line/cpc)",
+    "1.5/1.0": 30.2,
+    "2.5/1.5": 19.51,
+    "4.0/1.5": 16.71,
+    "6.0/2.5": 10.49,
+    "10/4.0": 6.44,
+    "16/6.0": 4.23,
+    "temp_multiplier_70c": 1.197,
+    "_source": "verified_2008_guide Appendix 4 Tables 4.3 and 4.6"
+  },
+  "adiabatic_k": {
+    "pvc_70_copper": 115,
+    "xlpe_90_copper": 100,
+    "_source": "verified_2008_guide Table C4.4"
+  },
+  "min_cpc_mm2_with_mcb": {
+    "B_6_to_50": 1.0,
+    "C_6_to_40": 1.0,
+    "_source": "verified_2008_guide Table E4.5 — so reduced-cpc T&E is OK with MCBs"
+  },
+  "cables": {
+    "_type": "70C thermoplastic flat twin & earth (6242Y), Table 4D5, copper",
+    "1.0": {
+      "cpc_mm2": 1.0,
+      "iz": {
+        "A": 11.5,
+        "C": 16,
+        "100": 13,
+        "101": 10.5,
+        "102": 13,
+        "103": 8
+      },
+      "mv_a_m": 44,
+      "_source": "verified_2008_guide App 2 (Table 4D5 sample); C/A/mV also secondary (cable datasheets)"
+    },
+    "1.5": {
+      "cpc_mm2": 1.0,
+      "iz": {
+        "A": 14.5,
+        "C": 20,
+        "100": 16,
+        "101": 13,
+        "102": 16,
+        "103": 10
+      },
+      "mv_a_m": 29,
+      "_source": "A, C, mV, cpc: secondary (Farnell + Rapid datasheets citing 17th Ed Table 4D5); 100-103 unverified"
+    },
+    "2.5": {
+      "cpc_mm2": 1.5,
+      "iz": {
+        "A": 20,
+        "C": 27,
+        "100": 21,
+        "101": 17,
+        "102": 21,
+        "103": 13.5
+      },
+      "mv_a_m": 18,
+      "_source": "Iz: verified_2008_guide Table C9.1; mV: secondary (datasheets)"
+    },
+    "4.0": {
+      "cpc_mm2": 1.5,
+      "iz": {
+        "A": 26,
+        "C": 37,
+        "100": 27,
+        "101": 22,
+        "102": 27,
+        "103": 17.5
+      },
+      "mv_a_m": 11,
+      "_source": "verified_2008_guide App 2 (Table 4D5 sample)"
+    },
+    "6.0": {
+      "cpc_mm2": 2.5,
+      "iz": {
+        "A": 32,
+        "C": 47,
+        "100": 34,
+        "101": 27,
+        "102": 35,
+        "103": 23
+      },
+      "mv_a_m": 7.3,
+      "_source": "A, C, mV, cpc: secondary (datasheets); 100-103 unverified"
+    },
+    "10.0": {
+      "cpc_mm2": 4.0,
+      "iz": {
+        "A": 44,
+        "C": 64,
+        "100": 45,
+        "101": 36,
+        "102": 47,
+        "103": 30
+      },
+      "mv_a_m": 4.4,
+      "_source": "A, C, mV, cpc: secondary (datasheets); 100-103 unverified"
+    },
+    "16.0": {
+      "cpc_mm2": 6.0,
+      "iz": {
+        "A": 57,
+        "C": 85,
+        "100": 57,
+        "101": 46,
+        "102": 63,
+        "103": 42.5
+      },
+      "mv_a_m": 2.8,
+      "_source": "verified_2008_guide App 2 (Table 4D5 sample)"
+    }
+  },
+  "correction_factors": {
+    "ca_ambient_pvc70": {
+      "25": 1.03,
+      "30": 1.0,
+      "35": 0.94,
+      "40": 0.87,
+      "45": 0.79,
+      "50": 0.71,
+      "_source": "30 = reference (verified_2008_guide C4.3.5); 40 = 0.87 secondary (open-exam-prep); 35/40 bracket secondary (IET forum); 25/45/50 unverified"
+    },
+    "cg_grouping": {
+      "bunched_enclosed": {
+        "1": 1.0,
+        "2": 0.8,
+        "3": 0.7,
+        "4": 0.65,
+        "5": 0.6,
+        "6": 0.57
+      },
+      "single_layer_wall_method_c": {
+        "1": 1.0,
+        "2": 0.85,
+        "3": 0.79,
+        "4": 0.75,
+        "5": 0.73,
+        "6": 0.72
+      },
+      "_source": "verified_2008_guide Table 4C1"
+    },
+    "grouping_ignore_if_load_pct_of_grouped_rating_le": {
+      "value": 30,
+      "_source": "verified_2008_guide Table 4C1 note 9"
+    },
+    "ci_fully_surrounded": {
+      "value": 0.5,
+      "_source": "verified_2008_guide C4.3.5 — not with methods 100-103"
+    },
+    "cc_rewirable_fuse": {
+      "value": 0.725,
+      "_source": "verified_2008_guide C4.3.5"
+    }
+  },
+  "circuit_templates": {
+    "_note": "max_length_m from 2008 Guide Table C9.2 (B-type, TN, 5%/3% VD) — sanity check only. TT + RCD not covered by that table.",
+    "LIGHTING": {
+      "device": "B6",
+      "cable_mm2": 1.5,
+      "pf": 1.0,
+      "vd_category": "lighting",
+      "max_device_a": 16,
+      "_max_device_source": "verified_2008_guide Table D14.1 (559.6.1.6, ES/BC lampholders)"
+    },
+    "SOCKET_RADIAL_20": {
+      "device": "B20",
+      "cable_mm2": 2.5,
+      "pf": 1.0,
+      "vd_category": "other",
+      "max_length_m": 40,
+      "max_area_m2": 50
+    },
+    "SOCKET_RING_32": {
+      "device": "B32",
+      "cable_mm2": 2.5,
+      "pf": 1.0,
+      "vd_category": "other",
+      "max_length_m": 106,
+      "max_area_m2": 100,
+      "requires_rcd": true
+    },
+    "SOCKET_RADIAL_32": {
+      "device": "B32",
+      "cable_mm2": 4.0,
+      "pf": 1.0,
+      "vd_category": "other",
+      "max_area_m2": 75
+    },
+    "_area_source": "100 m2 ring: secondary (Wikipedia, open-exam-prep) + UoM EE101 notes; 50/75 m2 radials: secondary (open-exam-prep)",
+    "AC_DEDICATED": {
+      "device": "B20",
+      "cable_mm2": 2.5,
+      "pf": 0.9,
+      "vd_category": "other",
+      "_note": "design choice"
+    },
+    "WATER_HEATER_STORAGE": {
+      "device": "B16",
+      "cable_mm2": 2.5,
+      "pf": 1.0,
+      "vd_category": "other",
+      "max_length_m": 55
+    },
+    "WATER_HEATER_INSTANT": {
+      "device": "B32",
+      "cable_mm2": 6.0,
+      "pf": 1.0,
+      "vd_category": "other",
+      "max_length_m": 53,
+      "special_location": "701"
+    },
+    "COOKER": {
+      "device": "B32",
+      "cable_mm2": 6.0,
+      "pf": 1.0,
+      "vd_category": "other",
+      "max_length_m": 53
+    }
+  },
+  "ring_rules": {
+    "device_a": [
+      30,
+      32
+    ],
+    "min_cable_mm2": 2.5,
+    "min_cable_iz_a": 20,
+    "unfused_spur_max": "one single or one twin socket",
+    "avoid_2kw_plus_fixed_loads_near_ring_ends": true,
+    "kitchen_own_circuit_recommended": true,
+    "_source": "verified_2008_guide C11.2 (433.1.4); 18th Ed reg 433.1.204 secondary (Wikipedia, IET forum)"
+  },
+  "earthing_bonding": {
+    "domestic_bond_to": [
+      "incoming metal water pipe",
+      "incoming metal gas pipe",
+      "metallic structure (one point)"
+    ],
+    "no_supplementary_bonding_in_kitchens": true,
+    "typical_domestic_earthing_conductor_mm2": 16,
+    "tt_earthing_conductor_min_mm2": 6,
+    "typical_main_bonding_mm2": 10,
+    "min_bonding_mm2": 6,
+    "high_leakage_circuit_gt_10ma": "dual cpc or >= 4 mm2 cpc (543.7.1.3)",
+    "functional_earth_colour": "pink",
+    "_source": "verified_2008_guide E6.3–E6.5, E7; pink FE: verified_current (NICEIC A4)"
+  },
+  "sockets": {
+    "type": "13 A BS 1363 square-pin",
+    "_source_type": "verified_current (PUCSL single plug/socket standard; Sunday Times 2015)",
+    "min_height_above_floor_or_worktop_mm": 150,
+    "uk_part_m_height_range_mm": [
+      450,
+      1200
+    ],
+    "_source_height": "verified_2008_guide D11 (UK Building Regs Part M — not a Sri Lankan rule)"
+  },
+  "lighting_design": {
+    "_purpose": "Used by LayoutDesigner to decide HOW MANY lights and switches per room. Not part of BS 7671 (BS 7671 has no lux levels).",
+    "target_lux": {
+      "LIVING": 200,
+      "DINING": 200,
+      "BEDROOM": 150,
+      "KITCHEN": 300,
+      "KITCHEN_WORKTOP": 500,
+      "BATHROOM": 200,
+      "STUDY": 400,
+      "CORRIDOR": 100,
+      "STAIRS": 100,
+      "GARAGE": 100,
+      "STORE": 75,
+      "VERANDAH": 75,
+      "_source": "unverified — commonly cited residential ranges (CIBSE/IES-style), picked mid-range: living 150–300, bedroom 100–150, kitchen 300 / worktop 500, bathroom 150–200, study 300–500, corridor/stairs 100, garage 50–100. Sri Lankan SLSEA code has illuminance tables (2009 Tables 2.10/2.11) but values were not extracted."
+    },
+    "lumen_method": {
+      "formula": "total_lm = E * A / (UF * MF); N = max(1, round(A / 6)); lamp = smallest option with lumens >= total_lm / N; if none, use brightest and N = ceil(total_lm / its lumens)",
+      "UF_default": 0.6,
+      "MF_default": 0.8,
+      "default_lamp": {
+        "type": "LED",
+        "watts": 9,
+        "lumens": 800
+      },
+      "lamp_options": [
+        {
+          "watts": 5,
+          "lumens": 450
+        },
+        {
+          "watts": 9,
+          "lumens": 800
+        },
+        {
+          "watts": 12,
+          "lumens": 1100
+        },
+        {
+          "watts": 18,
+          "lumens": 1600
+        },
+        {
+          "watts": 24,
+          "lumens": 2200
+        }
+      ],
+      "rule": "Fix the number of points from room size (~1 per 6 m2), then pick the smallest lamp that meets the lux target.",
+      "_source": "unverified — standard lumen method. UF 0.6 assumes small room, light-coloured walls/ceiling, LED fittings (typical UF range 0.4–0.7); MF 0.8 typical for LED in clean domestic rooms. Lamp lumens typical; datasheet overrides.",
+      "_rule_source": "lumen method: standard (unverified defaults); 1 point per 6 m2: design choice"
+    },
+    "power_density_check": {
+      "max_w_per_m2_benchmark": 7.5,
+      "status_if_exceeded": "INFO",
+      "_source": "verified (Sri Lankan source) — SLSEA Code of Practice for Energy Efficient Buildings 2009, Table 2.1 'Multifamily' 7.5 W/m². Code excludes single-family houses, so use as a benchmark only, never ERROR."
+    },
+    "switching": {
+      "one_switch_per_enclosed_room": true,
+      "no_gang_switching_across_rooms": true,
+      "switch_location": "inside room, next to the door (latch side)",
+      "two_way_for": [
+        "STAIRS",
+        "CORRIDOR_LONG",
+        "BEDROOM_OPTIONAL"
+      ],
+      "outdoor_lights": "photo-sensor or timer, with manual override",
+      "_source": "one switch per space, no gang switching, outdoor photo/timer: verified (Sri Lankan source) — SLSEA 2009 code (mandatory for buildings it covers; good practice for houses). Door-side and two-way locations: design choice."
+    },
+    "circuit_limits": {
+      "max_points_per_lighting_circuit": 10,
+      "split_rule": "Use at least 2 lighting circuits per house so one trip doesn't black out the whole home; put bathroom lighting on a circuit shared with an adjoining room",
+      "_source": "max points: design choice. Split rule: 📘 Guide C10.2 / G2.3 (avoid inconvenience; bathroom RCD nuisance-trip advice)."
+    }
+  },
+  "max_demand": {
+    "_purpose": "Check the whole house against the main switch / supply after every change",
+    "main_switch_a": 30,
+    "_source_main_switch": "verified (Sri Lankan source) — UoM EE101: single-phase main switch 'likely not to exceed 30A'. Project input: user should enter actual rating.",
+    "method": "Ib_total = sum(category demand) / 230; compare with main_switch_a",
+    "diversity": {
+      "LIGHTING": {
+        "factor": 0.66,
+        "applies_to": "total lighting load"
+      },
+      "SOCKETS": {
+        "rule": "100% of largest socket circuit's estimated load + 40% of every other socket circuit's estimated load",
+        "estimated_w_per_outlet": 200,
+        "_note": "Uses estimated load, not device rating. Rating-based (OSG-style) gives 36 A for 3 socket circuits, which fails every 30 A house. 200 W/outlet is a design choice."
+      },
+      "AC": {
+        "factor": 1.0,
+        "_note": "design choice — hot climate, ACs run together"
+      },
+      "WATER_HEATER_INSTANT": {
+        "rule": "100% of largest + 100% of second largest + 25% of the rest"
+      },
+      "WATER_HEATER_STORAGE": {
+        "factor": 1.0
+      },
+      "COOKER": {
+        "rule": "10 A + 30% of remaining current"
+      },
+      "FAN": {
+        "factor": 1.0
+      },
+      "_source": "unverified — On-Site Guide-style domestic diversity from model knowledge; 📘 Guide C3.3 confirms diversity is used only for max demand. Verify in On-Site Guide 9th Ed Appendix A."
+    },
+    "thresholds": {
+      "warning_pct_of_main_switch": 80,
+      "error_pct_of_main_switch": 100,
+      "_source": "design choice"
+    },
+    "suggested_fixes": [
+      "Ask CEB/LECO about a higher-rated single-phase or a three-phase supply",
+      "Stagger heavy loads (e.g. storage water heater on a timer)",
+      "Reduce AC count or choose inverter units with lower running current"
+    ],
+    "_note_three_phase": "verified_current (PUCSL): three-phase wiring needs a chartered engineer's design — say this when suggesting three-phase"
+  },
+  "typical_loads_w": {
+    "_source": "planning defaults, not from a standard — user value overrides",
+    "LIGHT": 20,
+    "FAN": 75,
+    "SOCKET": 0,
+    "AC_9000_BTU": 900,
+    "AC_12000_BTU": 1200,
+    "AC_18000_BTU": 1800,
+    "AC_24000_BTU": 2400,
+    "WATER_HEATER_INSTANT": 4500,
+    "WATER_HEATER_STORAGE": 3000
+  },
+  "bathroom_701": {
+    "all_circuits_rcd_30ma": true,
+    "supplementary_bonding_omitted_if_rcd_and_main_bonding": true,
+    "zone1_height_m": 2.25,
+    "zone2_width_m": 0.6,
+    "min_ip": {
+      "zone0": "IPX7",
+      "zone1": "IPX4",
+      "zone2": "IPX4",
+      "water_jets": "IPX5"
+    },
+    "socket_min_distance_from_zone1_m": 2.5,
+    "_source": "RCD, zones, IP, bonding: verified_2008_guide G2; 2.5 m: secondary (IET forum on A2 draft text of 701.512.3; 2008 value was 3 m)"
+  }
+}

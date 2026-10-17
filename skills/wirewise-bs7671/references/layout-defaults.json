@@ -1,0 +1,41 @@
+{
+  "_purpose": "WireWise layout defaults for values the rule profile does not define. Kept separate so rule-profile.json can be replaced without losing them. Every block has a _source; the app shows its trust tag.",
+  "room_type_to_profile": {
+    "living": "LIVING",
+    "bedroom": "BEDROOM",
+    "kitchen": "KITCHEN",
+    "bathroom": "BATHROOM",
+    "wc": "BATHROOM",
+    "dining": "DINING",
+    "hall": "CORRIDOR",
+    "office": "STUDY",
+    "storage": "STORE",
+    "garage": "GARAGE",
+    "_source": "design choice — maps WireWise room types to rule-profile lighting_design.target_lux keys. utility and other have no key, so they get a 'not in rule profile' warning."
+  },
+  "sockets_per_room": {
+    "_unit": "twin (double) 13 A socket outlets",
+    "_rule": "count = min(max, max(min, ceil(area_m2 / m2_per_outlet)))",
+    "living": { "min": 4, "m2_per_outlet": 6, "max": 8 },
+    "bedroom": { "min": 3, "m2_per_outlet": 6, "max": 6 },
+    "kitchen": { "min": 4, "m2_per_outlet": 3, "max": 8 },
+    "dining": { "min": 2, "m2_per_outlet": 8, "max": 4 },
+    "office": { "min": 3, "m2_per_outlet": 5, "max": 6 },
+    "hall": { "min": 1, "m2_per_outlet": 10, "max": 2 },
+    "utility": { "min": 2, "m2_per_outlet": 5, "max": 4 },
+    "garage": { "min": 2, "m2_per_outlet": 10, "max": 4 },
+    "storage": { "min": 0, "m2_per_outlet": 0, "max": 0 },
+    "bathroom": { "min": 0, "m2_per_outlet": 0, "max": 0 },
+    "wc": { "min": 0, "m2_per_outlet": 0, "max": 0 },
+    "other": { "min": 2, "m2_per_outlet": 8, "max": 4 },
+    "_source": "unverified — WireWise design default (typical UK new-build practice), not from BS 7671 or the rule profile. Replace with your own values. Bathroom/WC are 0 because of the Section 701 socket distance rule."
+  },
+  "placement_cm": {
+    "socket_inset_from_wall": 15,
+    "switch_inset_from_wall": 12,
+    "switch_offset_from_door_edge": 15,
+    "keep_sockets_from_door_edge": 30,
+    "keep_sockets_from_switch": 40,
+    "_source": "design choice — plan positions only; mounting heights come from rule-profile sockets"
+  }
+}

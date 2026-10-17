@@ -49,34 +49,111 @@ def _fit(w, h, max_w=900.0):
         return 900.0, 620.0
     return max_w, max_w * h / w
 
+# Line-art cleanup for raster plans (photos, scans, JPG exports)
+MIN_LONG_PX = 2400     # upscale smaller images so lines stay smooth when enlarged
+MAX_LONG_PX = 4000     # cap output size (stored in the graph as a data URL)
+MAX_INK_COVER = 0.35   # above this the image is not line art (photo, filled render)
+LINE_INK = 0.35        # ink at least this dark (vs paper) is drawn fully black
+
+def _clean_lineart(img):
+    """Turn a drawing on paper into crisp dark lines on a transparent background.
+
+    Returns PNG bytes, or None when the image does not look like line art.
+    """
+    import numpy as np
+    from PIL import Image, ImageFilter, ImageOps
+    img = ImageOps.exif_transpose(img).convert("L")
+    w, h = img.size
+    long_side = max(w, h)
+    k = min(3.0, MIN_LONG_PX / long_side) if long_side < MIN_LONG_PX else min(1.0, MAX_LONG_PX / long_side)
+    if k != 1.0:
+        img = img.resize((max(1, round(w * k)), max(1, round(h * k))), Image.LANCZOS)
+    w, h = img.size
+    # Paper estimate: shrink, take local max (removes lines), blur, scale back up.
+    # Dividing by it flattens shadows, yellowed paper and uneven scan lighting.
+    small = img.resize((max(1, w // 16), max(1, h // 16)), Image.BILINEAR)
+    paper = small.filter(ImageFilter.MaxFilter(5)).filter(ImageFilter.GaussianBlur(2))
+    paper = np.asarray(paper.resize((w, h), Image.BILINEAR), dtype=np.float32)
+    gray = np.asarray(img, dtype=np.float32)
+    ink = 1.0 - np.clip(gray / np.maximum(paper, 1.0), 0.0, 1.0)   # 0 = paper, 1 = black
+    # Paper cutoff sits just above the image's own noise (JPEG speckle, paper grain),
+    # so clean scans keep faint hairlines and noisy photos still come out clean.
+    med = float(np.median(ink))
+    noise = 1.4826 * float(np.median(np.abs(ink - med)))
+    cutoff = min(0.12, max(0.05, med + 5.0 * noise))
+    marked = ink > cutoff
+    if marked.mean() > MAX_INK_COVER or not marked.any():
+        return None
+    # Stretch so typical line darkness maps to full black; keep anti-aliased edges
+    full = min(LINE_INK, max(cutoff + 0.1, float(np.percentile(ink[marked], 50))))
+    alpha = np.clip((ink - cutoff) / (full - cutoff), 0.0, 1.0) ** 0.6
+    out = np.empty((h, w, 2), dtype=np.uint8)
+    out[..., 0] = 17                                   # near-black line colour
+    out[..., 1] = (alpha * 255.0 + 0.5).astype(np.uint8)
+    buf = io.BytesIO()
+    Image.fromarray(out, "LA").save(buf, "PNG", optimize=True)
+    return buf.getvalue()
+
 def _from_image(raw, ext):
-    import pymupdf
-    ftype = "jpg" if ext == "jpeg" else ("tiff" if ext == "tif" else ext)
-    doc = pymupdf.open(stream=raw, filetype=ftype)
-    page = doc[0]
-    w, h = page.rect.width, page.rect.height
-    if ext in ("png", "jpg", "jpeg", "gif", "webp"):
-        mime = "image/jpeg" if ext in ("jpg", "jpeg") else "image/" + ext
-        image = _data_url(mime, raw)
-    elif ext == "svg":
-        image = _data_url("image/svg+xml", raw)
+    from PIL import Image
+    if ext == "svg":
+        import pymupdf
+        page = pymupdf.open(stream=raw, filetype="svg")[0]
+        fw, fh = _fit(page.rect.width, page.rect.height)
+        return {"ok": True, "message": "SVG imported. Use Set scale to match real size.", "image": _data_url("image/svg+xml", raw),
+                "width_cm": fw, "height_cm": fh, "scaled": False, "source": "SVG"}
+    img = Image.open(io.BytesIO(raw))
+    img.seek(0)  # first frame of animated GIF / multi-page TIFF
+    w, h = img.size
+    png = _clean_lineart(img)
+    if png is not None:
+        image = _data_url("image/png", png)
+        msg = "Image imported and lines sharpened."
+    elif ext in ("png", "jpg", "jpeg", "gif", "webp"):
+        image = _data_url("image/jpeg" if ext in ("jpg", "jpeg") else "image/" + ext, raw)
+        msg = "Image imported as-is (looks like a photo, not a line drawing)."
     else:  # bmp / tiff -> png so every browser can show it
-        image = _data_url("image/png", page.get_pixmap().tobytes("png"))
+        buf = io.BytesIO()
+        img.convert("RGB").save(buf, "PNG")
+        image = _data_url("image/png", buf.getvalue())
+        msg = "Image imported as-is (looks like a photo, not a line drawing)."
     fw, fh = _fit(w, h)
-    return {"ok": True, "message": "Image imported. Use Set scale to match real size.", "image": image,
+    return {"ok": True, "message": msg + " Use Set scale to match real size.", "image": image,
             "width_cm": fw, "height_cm": fh, "scaled": False, "source": ext.upper()}
+
+MAX_SVG_BYTES = 12 * 1024 * 1024
+
+def _is_scan(page):
+    """True when the page is mostly one big picture (a scanned drawing) rather than vector lines."""
+    page_area = abs(page.rect)
+    img_area = 0.0
+    for info in page.get_image_info():
+        img_area += abs(page.rect & info["bbox"])
+    return page_area > 0 and img_area / page_area > 0.5 and len(page.get_drawings()) < 50
 
 def _from_pdf(raw):
     import pymupdf
+    from PIL import Image
     doc = pymupdf.open(stream=raw, filetype="pdf")
     page = doc[0]
-    zoom = min(3.0, 3000.0 / max(page.rect.width, page.rect.height))
-    pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
     fw, fh = _fit(page.rect.width, page.rect.height)
-    msg = "PDF page 1 imported."
+    msg = "PDF page 1 imported"
     if doc.page_count > 1:
-        msg = "PDF has " + str(doc.page_count) + " pages; page 1 imported."
-    return {"ok": True, "message": msg + " Use Set scale to match real size.", "image": _data_url("image/png", pix.tobytes("png")),
+        msg = "PDF has " + str(doc.page_count) + " pages; page 1 imported"
+    if not _is_scan(page):
+        # Vector drawing: keep it as SVG so lines stay sharp at any zoom
+        svg_text = page.get_svg_image(text_as_path=True)
+        if len(svg_text) <= MAX_SVG_BYTES:
+            return {"ok": True, "message": msg + " as vector lines. Use Set scale to match real size.",
+                    "image": _data_url("image/svg+xml", svg_text.encode("utf-8")),
+                    "width_cm": fw, "height_cm": fh, "scaled": False, "source": "PDF"}
+    # Scanned (or too complex for SVG): render at high resolution and clean up the lines
+    zoom = MAX_LONG_PX / max(page.rect.width, page.rect.height)
+    pix = page.get_pixmap(matrix=pymupdf.Matrix(zoom, zoom), alpha=False)
+    img = Image.open(io.BytesIO(pix.tobytes("png")))
+    png = _clean_lineart(img) or pix.tobytes("png")
+    return {"ok": True, "message": msg + " and lines sharpened. Use Set scale to match real size.",
+            "image": _data_url("image/png", png),
             "width_cm": fw, "height_cm": fh, "scaled": False, "source": "PDF"}
 
 def _thicken(svg_text):
