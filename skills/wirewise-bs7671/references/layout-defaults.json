@@ -135,5 +135,10 @@
       "bedroom": 400
     },
     "_cu_source": "design choice — near the load centre on an outside wall, preferably hall/utility/garage, never in a bathroom or WC"
+  },
+  "bom": {
+    "cable_allowance_pct": 10,
+    "round_up_to_m": 5,
+    "_source": "design choice — purchase allowance for offcuts and terminations on top of the estimated route lengths"
   }
 }
