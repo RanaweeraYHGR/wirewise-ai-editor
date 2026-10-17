@@ -20,6 +20,10 @@ radius = "large"
 menuAccent = "bold"
 menuColor = "default"
 [dependencies]
+# Floor plan import: DXF (AutoCAD) and PDF/image conversion
+ezdxf = ">=1.1.0"
+pymupdf = ">=1.24.0"
+
 [dependencies.npm]
 "@fontsource-variable/jetbrains-mono" = "*"
 react = "^18.2.0"
