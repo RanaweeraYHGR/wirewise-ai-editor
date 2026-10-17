@@ -82,15 +82,15 @@ plugins = ["tailwindcss()"]
 lib_imports = ["import tailwindcss from '@tailwindcss/vite'"]
 
 [client.app_meta_data]
-title = "A blank canvas"
-description = "A minimal jac-shadcn starter with the theme wired up and nothing in the way."
-keywords = "jac, starter, shadcn, template"
-author = "Blank canvas"
+title = "LUMIRA"
+description = "LUMIRA: turn a floor plan into a BS 7671 electrical design: rooms, lights, sockets, appliances and the consumer unit."
+keywords = "LUMIRA, electrical design, floor plan, wiring, BS 7671, consumer unit"
+author = "LUMIRA"
 theme_color = "#dc7702"
 og_type = "website"
-og_title = "A blank canvas"
-og_description = "A minimal jac-shadcn starter."
-og_site_name = "Blank canvas"
+og_title = "LUMIRA"
+og_description = "Floor plan to electrical design: rooms, lights, sockets, appliances and the consumer unit."
+og_site_name = "LUMIRA"
 
 
 

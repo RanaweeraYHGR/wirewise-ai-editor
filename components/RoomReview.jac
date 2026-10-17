@@ -124,6 +124,6 @@ def:pub RoomReview(
             {len(asks) > 0 and <div className="rr-hint">Answer the highlighted rooms to add them too.</div>}
         </div>}
 
-        <div className="rr-next"><span className="rr-kicker">STEP 2 OF 2 · WIRING</span><span>After you add the rooms, WireWise calculates lights (lux levels), a switch by each door and socket outlets per room.</span></div>
+        <div className="rr-next"><span className="rr-kicker">STEP 2 OF 2 · WIRING</span><span>After you add the rooms, LUMIRA calculates lights (lux levels), a switch by each door and socket outlets per room.</span></div>
     </div>;
 }

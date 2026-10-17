@@ -1,14 +1,16 @@
+import hashlib;
 import from services.planConvert { convert_plan }
 import from services.planVision { scan_start }
 import from services.layoutDesigner {
     design_room, load_catalog, find_item, ac_sizing, ac_room_types_excluded,
-    protection, place_appliance, place_by_door, max_demand
+    protection, place_appliance, place_by_door, max_demand,
+    wiring_options, suggest_cu, design_wiring
 }
 import from services.roomAgent { identify_rooms, RoomGuess }
 import from jaclang.byllm.lib { Image }
 
 node Project {
-    has name: str = "WireWise Residence";
+    has name: str = "LUMIRA Residence";
     has standard: str = "BS 7671";
 }
 
@@ -77,6 +79,17 @@ node RoomSuggestion {
     has sized: bool = False;        # True when the plan has a real scale
     has written_label: str = "";
     has written_size: str = "";
+}
+
+"""Consumer unit for a level: its position and, once wired, the circuit design."""
+node ConsumerUnit {
+    has x: float = 0.0;
+    has y: float = 0.0;
+    has room_name: str = "";
+    has confirmed: bool = False;
+    has design: dict[str, any] = {};
+    has opts: dict[str, any] = {};
+    has signature: str = "";        # devices the design was made for; differs => plan changed since wiring
 }
 
 edge HasLevel: Project --> Level {}
@@ -153,7 +166,7 @@ def _project_weight(project: Project) -> int {
 def _get_level() -> Level {
     projects = [root -->][?:Project];
     if len(projects) == 0 {
-        project = Project(name="WireWise Residence");
+        project = Project(name="LUMIRA Residence");
         root ++> project;
     } elif len(projects) == 1 {
         project = projects[0];
@@ -182,6 +195,9 @@ def _get_level() -> Level {
 }
 
 def _clear_level(level: Level) -> None {
+    for cu in [level -->][?:ConsumerUnit] {
+        del cu;
+    }
     for room in [level ->:HasRoom:->] {
         for device in [room -->][?:Device] {
             del device;
@@ -944,76 +960,137 @@ def:pub get_loads() -> LoadsResult {
     return _loads_result(_get_level());
 }
 
-"""Add one appliance load to a room: the appliance, its labelled plug base, breaker and cable from the rule profile."""
-def:pub add_load(item_id: str, room_id: str, watts: float = 0.0, name: str = "") -> LoadsResult {
+obj LoadPreview {
+    has ok: bool = True;
+    has message: str = "";
+    has item_id: str = "";
+    has room_id: str = "";
+    has room_name: str = "";
+    has tag: str = "";
+    has name: str = "";
+    has has_appliance: bool = False;
+    has app_x: float = 0.0;
+    has app_y: float = 0.0;
+    has plug_x: float = 0.0;
+    has plug_y: float = 0.0;
+    has where: str = "";
+    has poly: list[float] = [];     # target room outline, flattened x,y in canvas cm
+}
+
+obj _Spot {
+    has app: list[float];
+    has plug: list[float];
+    has where: str;
+    has notes: list[dict[str, str]];
+}
+
+"""Where an appliance and its plug base go in a room (nothing is saved)."""
+def _plan_spot(level: Level, room: Room, item: dict[str, any], item_id: str, label: str) -> _Spot {
+    # Every device on the level counts: a heater switch outside the bathroom lands in the next room
+    taken = [[d.x, d.y] for r in [level ->:HasRoom:->] for d in [r -->][?:Device]];
+    rect = (room.x, room.y, room.width, room.height);
+    if item_id.startswith("pump") {
+        # The pump sits outside; only its switch and outlet go in the kitchen, by the door
+        (plug_xy, found) = place_by_door(room.poly, rect, room.doors, taken, False);
+        where = f"{room.name}, by the door" if found else f"{room.name} (door not found: move it next to the door)";
+        return _Spot(app=[], plug=plug_xy, where=where, notes=[]);
+    }
+    placed = place_appliance(room.poly, rect, room.doors, taken, item) as dict[str, list[float]];
+    if (item["demand"] as str).startswith("WATER_HEATER") {
+        # Switch goes in the room on the other side of the bathroom door (the room sharing that doorway)
+        (neighbour, shared) = _room_through_door(level, room);
+        found = False;
+        plug_xy: list[float] = [];
+        if neighbour is not None {
+            (plug_xy, found) = place_by_door(neighbour.poly, (neighbour.x, neighbour.y, neighbour.width, neighbour.height), shared, taken, False);
+        }
+        if found and neighbour is not None {
+            return _Spot(app=placed["appliance"], plug=plug_xy, where=f"{neighbour.name}, outside the {room.name} door", notes=[]);
+        }
+        return _Spot(app=placed["appliance"], plug=placed["plug"], where=f"{room.name} (door not found)", notes=[
+            {"level": "WARNING", "text": "Door not found: move this switch outside the bathroom (Section 701 zones).", "rule": "Section 701", "trust": "design choice"}
+        ]);
+    }
+    return _Spot(app=placed["appliance"], plug=placed["plug"], where=f"{room.name}, beside the {label.lower()}", notes=[]);
+}
+
+def _outline(room: Room) -> list[float] {
+    if len(room.poly) >= 6 { return room.poly; }
+    return [room.x, room.y, room.x + room.width, room.y, room.x + room.width, room.y + room.height, room.x, room.y + room.height];
+}
+
+"""Suggested position for an appliance and its plug base, shown on the plan before the user adds it."""
+def:pub preview_load(item_id: str, room_id: str) -> LoadPreview {
+    level = _get_level();
+    room = _find_room(level, room_id);
+    item = find_item(item_id) as dict[str, any] | None;
+    if room is None or item is None {
+        return LoadPreview(ok=False, message="Unknown room or load.");
+    }
+    label = item["name"] as str;
+    spot = _plan_spot(level, room, item, item_id, label);
+    return LoadPreview(
+        ok=True, item_id=item_id, room_id=room_id, room_name=room.name, tag=_next_tag(level, item["tag"] as str), name=label,
+        has_appliance=len(spot.app) == 2, app_x=spot.app[0] if len(spot.app) == 2 else 0.0, app_y=spot.app[1] if len(spot.app) == 2 else 0.0,
+        plug_x=spot.plug[0], plug_y=spot.plug[1], where=spot.where, poly=_outline(room)
+    );
+}
+
+def _num(v: any) -> float {
+    # Optional args can arrive as "" from the HTTP bridge when omitted
+    return float(v) if v else 0.0;
+}
+
+"""Add one appliance load to a room: the appliance, its labelled plug base, breaker and cable from the rule profile.
+app_x/app_y and plug_x/plug_y (canvas cm) override the suggested positions when the user moved them."""
+def:pub add_load(
+    item_id: str, room_id: str, watts: float = 0.0, name: str = "",
+    app_x: float = 0.0, app_y: float = 0.0, plug_x: float = 0.0, plug_y: float = 0.0
+) -> LoadsResult {
     level = _get_level();
     room = _find_room(level, room_id);
     item = find_item(item_id) as dict[str, any] | None;
     if room is None or item is None {
         return _loads_result(level, False, "Unknown room or load.");
     }
-    # Optional args can arrive as "" from the HTTP bridge when omitted
-    given_w = float(watts) if watts else 0.0;
+    given_w = _num(watts);
     given_name = str(name).strip() if name else "";
     load_w = given_w if given_w > 0.0 else item["watts"] as float;
     label = given_name if given_name != "" else item["name"] as str;
     tag = _next_tag(level, item["tag"] as str);
     prot = protection(item, load_w) as dict[str, any];
-    notes = prot["checks"] as list[dict[str, str]];
-    # Every device on the level counts: a heater switch outside the bathroom lands in the next room
-    taken = [[d.x, d.y] for r in [level ->:HasRoom:->] for d in [r -->][?:Device]];
-    plug_xy: list[float] = [];
-    app_xy: list[float] = [];
-    where = "";
-    if item_id.startswith("pump") {
-        # The pump sits outside; only its switch and outlet go in the kitchen, by the door
-        (plug_xy, found) = place_by_door(room.poly, (room.x, room.y, room.width, room.height), room.doors, taken, False);
-        where = f"{room.name}, by the door" if found else f"{room.name} (door not found: move it next to the door)";
-    } elif (item["demand"] as str).startswith("WATER_HEATER") {
-        placed = place_appliance(room.poly, (room.x, room.y, room.width, room.height), room.doors, taken, item) as dict[str, list[float]];
-        app_xy = placed["appliance"];
-        # Switch goes in the room on the other side of the bathroom door (the room sharing that doorway)
-        (neighbour, shared) = _room_through_door(level, room);
-        found = False;
-        if neighbour is not None {
-            (plug_xy, found) = place_by_door(neighbour.poly, (neighbour.x, neighbour.y, neighbour.width, neighbour.height), shared, taken, False);
-        }
-        if found and neighbour is not None {
-            where = f"{neighbour.name}, outside the {room.name} door";
-        } else {
-            plug_xy = placed["plug"];
-            where = f"{room.name} (door not found)";
-            notes = notes + [{"level": "WARNING", "text": "Door not found: move this switch outside the bathroom (Section 701 zones).", "rule": "Section 701", "trust": "design choice"}];
-        }
-    } else {
-        placed = place_appliance(room.poly, (room.x, room.y, room.width, room.height), room.doors, taken, item) as dict[str, list[float]];
-        app_xy = placed["appliance"];
-        plug_xy = placed["plug"];
-        where = f"{room.name}, beside the {label.lower()}";
+    spot = _plan_spot(level, room, item, item_id, label);
+    app_xy = spot.app;
+    plug_xy = spot.plug;
+    where = spot.where;
+    if _num(app_x) > 0.0 and _num(app_y) > 0.0 and len(app_xy) == 2 {
+        app_xy = [_num(app_x), _num(app_y)];
     }
-    common = {"tag": tag, "item_id": item_id, "load_w": load_w};
+    if _num(plug_x) > 0.0 and _num(plug_y) > 0.0 {
+        plug_xy = [_num(plug_x), _num(plug_y)];
+        where = "your position on the plan";
+    }
     if len(app_xy) == 2 {
         room ++> Device(kind=APPLIANCE_KIND, x=app_xy[0], y=app_xy[1], label=tag, spec=label, tag=tag, item_id=item_id);
     }
     room ++> Device(
         kind=PLUG_KIND, x=plug_xy[0], y=plug_xy[1], label=tag, spec=label, tag=tag, item_id=item_id, load_w=load_w,
         demand=item["demand"] as str, ib=prot["ib"] as float, breaker=prot["breaker"] as str, cable=prot["cable"] as float,
-        outlet=f"{item['outlet']} · {where}", notes=notes
+        outlet=f"{item['outlet']} · {where}", notes=(prot["checks"] as list[dict[str, str]]) + spot.notes
     );
     return _loads_result(level, True, f"{tag} added: {label} in {room.name}.");
 }
 
-"""Size an AC from the room's area (BTU) and add it with its high-level plug base."""
-def:pub add_ac(room_id: str) -> LoadsResult {
+"""Size an AC from the room's area (BTU) and add it with its high-level plug base (first unit at the given positions)."""
+def:pub add_ac(room_id: str, app_x: float = 0.0, app_y: float = 0.0, plug_x: float = 0.0, plug_y: float = 0.0) -> LoadsResult {
     level = _get_level();
     room = _find_room(level, room_id);
     if room is None {
         return _loads_result(level, False, "Unknown room.");
     }
     a = ac_sizing(_room_area_m2(room)) as dict[str, any];
-    units = a["units"] as int;
-    result = _loads_result(level);
-    for _ in range(units) {
+    result = add_load(a["item_id"] as str, room_id, 0.0, "", app_x, app_y, plug_x, plug_y);
+    for _ in range((a["units"] as int) - 1) {
         result = add_load(a["item_id"] as str, room_id);
     }
     return result;
@@ -1030,4 +1107,259 @@ def:pub remove_load(tag: str) -> LoadsResult {
         }
     }
     return _loads_result(level, True, f"{tag} removed.");
+}
+
+# ---- Consumer unit and wiring ("Start wire", step 4) ----
+
+obj MethodOption {
+    has id: str;
+    has label: str;
+}
+
+obj CircuitInfo {
+    has id: str;
+    has name: str;
+    has kind: str;              # lighting | sockets | dedicated
+    has rooms: list[str];
+    has rcd: str;
+    has breaker: str;
+    has cable: float;
+    has cpc: float;
+    has length_m: float;
+    has ib: float;
+    has iz: float;
+    has vd_pct: float;
+    has vd_limit: float;
+    has status: str;
+    has spd: bool;
+    has tag: str;
+    has path: list[float];      # flattened x,y in canvas cm, from the consumer unit
+    has checks: list[LayoutCheck];
+}
+
+obj BoardInfo {
+    has main_a: int = 0;
+    has spd: bool = False;
+    has rccb_a: int = 0;
+    has rccb_ma: int = 30;
+    has rccb_type: str = "A";
+    has rows: int = 1;
+    has row_modules: int = 13;
+    has used_modules: int = 0;
+    has spare_pct: float = 0.0;
+    has rcd1_a: float = 0.0;
+    has rcd2_a: float = 0.0;
+    has trust: str = "";
+}
+
+obj CuInfo {
+    has ok: bool = True;
+    has message: str = "";
+    has has_rooms: bool = False;
+    has saved: bool = False;            # a position is stored (else x,y is only a suggestion)
+    has confirmed: bool = False;
+    has x: float = 0.0;
+    has y: float = 0.0;
+    has room_name: str = "";
+    has reason: str = "";
+    has trust: str = "";
+    has methods: list[MethodOption] = [];
+    has methods_trust: str = "";
+    has ambients: list[int] = [];
+    has groupings: list[int] = [];
+    has main_switch_a: int = 30;
+    has wired: bool = False;
+    has stale: bool = False;
+    has method: str = "";
+    has ambient_c: int = 30;
+    has grouped: int = 1;
+    has ra_ohm: float = 0.0;
+    has spd: bool = False;
+    has circuits: list[CircuitInfo] = [];
+    has board: BoardInfo = BoardInfo();
+    has checks: list[LayoutCheck] = [];
+    has summary: str = "";
+}
+
+def _cu(level: Level) -> ConsumerUnit | None {
+    found = [level -->][?:ConsumerUnit];
+    return found[0] if len(found) > 0 else None;
+}
+
+"""Rooms and their devices in the shape the wiring engine reads."""
+def _wiring_rooms(level: Level) -> list[dict[str, any]] {
+    out: list[dict[str, any]] = [];
+    for room in [level ->:HasRoom:->] {
+        pts = _outline(room);
+        n = len(pts) // 2;
+        cx = sum([pts[2 * i] for i in range(n)]) / n;
+        cy = sum([pts[2 * i + 1] for i in range(n)]) / n;
+        lights: list[list[float]] = [];
+        switches: list[list[float]] = [];
+        sockets: list[list[float]] = [];
+        loads: list[dict[str, any]] = [];
+        for d in [room -->][?:Device] {
+            if d.kind == LIGHT_KIND {
+                w = d.load_w;
+                if w == 0.0 and " W" in d.spec { w = float(d.spec.split(" W")[0]); }
+                lights.append([d.x, d.y, w]);
+            } elif d.kind == SWITCH_KIND {
+                switches.append([d.x, d.y]);
+            } elif d.kind == SOCKET_KIND {
+                sockets.append([d.x, d.y]);
+            } elif d.kind == PLUG_KIND and d.load_w > 0.0 {
+                loads.append({"tag": d.tag, "name": d.spec, "item_id": d.item_id, "watts": d.load_w, "x": d.x, "y": d.y});
+            }
+        }
+        weights = [[l[0], l[1], l[2]] for l in lights] + [[p[0], p[1], 200.0] for p in sockets] + [[l["x"], l["y"], l["watts"]] for l in loads];
+        out.append({
+            "id": jid(room), "name": room.name, "type": room.room_type, "poly": room.poly,
+            "rect": (room.x, room.y, room.width, room.height), "doors": room.doors, "area_m2": _room_area_m2(room),
+            "centroid": [cx, cy], "lights": lights, "switches": switches, "sockets": sockets, "loads": loads, "weights": weights
+        });
+    }
+    return out;
+}
+
+def _device_signature(level: Level) -> str {
+    parts = sorted([f"{d.kind}:{round(d.x)}:{round(d.y)}:{d.load_w}" for r in [level ->:HasRoom:->] for d in [r -->][?:Device]]);
+    # md5 rather than hash(): Python's string hash changes on every server restart
+    return str(len(parts)) + ":" + hashlib.md5("|".join(parts).encode("utf-8")).hexdigest();
+}
+
+def _cu_info(level: Level, ok: bool = True, message: str = "") -> CuInfo {
+    o = wiring_options() as dict[str, any];
+    info = CuInfo(
+        ok=ok, message=message, has_rooms=len([level ->:HasRoom:->]) > 0,
+        methods=[MethodOption(id=m["id"], label=m["label"]) for m in o["methods"] as list[dict[str, str]]],
+        methods_trust=o["methods_trust"] as str, ambients=o["ambients"] as list[int], groupings=o["groupings"] as list[int],
+        main_switch_a=o["main_switch_a"] as int
+    );
+    cu = _cu(level);
+    if cu is None {
+        rooms = _wiring_rooms(level);
+        spot = suggest_cu([{**r, "loads": r["weights"]} for r in rooms], []) as dict[str, any] | None;
+        if spot is not None {
+            info.x = spot["x"] as float;
+            info.y = spot["y"] as float;
+            info.room_name = spot["room_name"] as str;
+            info.reason = spot["reason"] as str;
+            info.trust = spot["trust"] as str;
+        }
+        return info;
+    }
+    info.saved = True;
+    info.confirmed = cu.confirmed;
+    info.x = cu.x;
+    info.y = cu.y;
+    info.room_name = cu.room_name;
+    info.reason = "Your consumer unit position" if cu.confirmed else "";
+    if len(cu.opts) > 0 {
+        info.method = cu.opts["method"] as str;
+        info.ambient_c = cu.opts["ambient_c"] as int;
+        info.grouped = cu.opts["grouped"] as int;
+        info.ra_ohm = cu.opts["ra_ohm"] as float;
+        info.main_switch_a = cu.opts["main_a"] as int;
+        info.spd = cu.opts["spd"] as bool;
+    }
+    if len(cu.design) > 0 {
+        d = cu.design;
+        info.wired = True;
+        info.stale = cu.signature != _device_signature(level);
+        info.circuits = [
+            CircuitInfo(
+                id=c["id"], name=c["name"], kind=c["kind"], rooms=c["rooms"], rcd=c["rcd"], breaker=c["breaker"],
+                cable=c["cable"], cpc=c["cpc"], length_m=c["length_m"], ib=c["ib"], iz=c["iz"], vd_pct=c["vd_pct"],
+                vd_limit=c["vd_limit"], status=c["status"], spd=c["spd"], tag=c.get("tag", ""),
+                path=[v for pt in c["path"] for v in pt],
+                checks=[LayoutCheck(level=k["level"], text=k["text"], rule=k["rule"], trust=k["trust"]) for k in c["checks"]]
+            )
+            for c in d["circuits"] as list[dict[str, any]]
+        ];
+        b = d["board"] as dict[str, any];
+        loads = b["rcd_load_a"] as dict[str, float];
+        info.board = BoardInfo(
+            main_a=b["main_a"], spd=b["spd"], rccb_a=b["rccb_a"], rccb_ma=b["rccb_ma"], rccb_type=b["rccb_type"], rows=b["rows"],
+            row_modules=b["row_modules"], used_modules=b["used_modules"], spare_pct=b["spare_pct"],
+            rcd1_a=loads.get("RCD1", 0.0), rcd2_a=loads.get("RCD2", 0.0), trust=b["trust"]
+        );
+        info.checks = [LayoutCheck(level=k["level"], text=k["text"], rule=k["rule"], trust=k["trust"]) for k in d["checks"] as list[dict[str, str]]];
+        info.summary = d["summary"] as str;
+    }
+    return info;
+}
+
+"""Consumer unit position (a suggestion until confirmed), the Start wire options and the wiring design."""
+def:pub get_cu() -> CuInfo {
+    return _cu_info(_get_level());
+}
+
+"""Fix the consumer unit at this position (canvas cm). Moving it clears an existing wiring design."""
+def:pub confirm_cu(x: float, y: float) -> CuInfo {
+    level = _get_level();
+    cu = _cu(level);
+    if cu is None {
+        cu = ConsumerUnit();
+        level ++> cu;
+    }
+    if abs(cu.x - float(x)) > 1.0 or abs(cu.y - float(y)) > 1.0 {
+        cu.design = {};
+    }
+    cu.x = float(x);
+    cu.y = float(y);
+    cu.room_name = "";
+    for room in [level ->:HasRoom:->] {
+        pts = _outline(room);
+        xs = [pts[i] for i in range(0, len(pts), 2)];
+        ys = [pts[i] for i in range(1, len(pts), 2)];
+        if cu.x >= min(xs) and cu.x <= max(xs) and cu.y >= min(ys) and cu.y <= max(ys) {
+            cu.room_name = room.name;
+        }
+    }
+    cu.confirmed = True;
+    return _cu_info(level, True, "Consumer unit position confirmed.");
+}
+
+"""Unlock the consumer unit so it can be moved (keeps the design until it is moved)."""
+def:pub move_cu() -> CuInfo {
+    level = _get_level();
+    cu = _cu(level);
+    if cu is not None {
+        cu.confirmed = False;
+    }
+    return _cu_info(level);
+}
+
+"""Design every circuit from the consumer unit: grouping, breakers, cables (Iz, voltage drop, cpc), RCCB split and board."""
+def:pub start_wiring(method: str, ambient_c: int, grouped: int, ra_ohm: float, main_a: int, spd: bool) -> CuInfo {
+    level = _get_level();
+    cu = _cu(level);
+    if cu is None or not cu.confirmed {
+        return _cu_info(level, False, "Confirm the consumer unit position first.");
+    }
+    if not method {
+        return _cu_info(level, False, "Choose the installation method first: cable sizes depend on it.");
+    }
+    rooms = _wiring_rooms(level);
+    if len(rooms) == 0 {
+        return _cu_info(level, False, "Add rooms first.");
+    }
+    opts = {
+        "method": str(method), "ambient_c": int(ambient_c) if ambient_c else 30, "grouped": int(grouped) if grouped else 1,
+        "ra_ohm": float(ra_ohm) if ra_ohm else 0.0, "main_a": int(main_a) if main_a else 30, "spd": bool(spd) and str(spd) != "false"
+    };
+    cu.opts = opts;
+    cu.design = design_wiring([cu.x, cu.y], rooms, opts) as dict[str, any];
+    cu.signature = _device_signature(level);
+    return _cu_info(level, True, "Wiring designed.");
+}
+
+"""Remove the wiring design (the consumer unit stays)."""
+def:pub clear_wiring() -> CuInfo {
+    level = _get_level();
+    cu = _cu(level);
+    if cu is not None {
+        cu.design = {};
+    }
+    return _cu_info(level);
 }
