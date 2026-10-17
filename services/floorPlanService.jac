@@ -1,10 +1,11 @@
 import hashlib;
+import from datetime { datetime }
 import from services.planConvert { convert_plan }
 import from services.planVision { scan_start }
 import from services.layoutDesigner {
     design_room, load_catalog, find_item, ac_sizing, ac_room_types_excluded,
     protection, place_appliance, place_by_door, max_demand,
-    wiring_options, suggest_cu, design_wiring
+    wiring_options, suggest_cu, design_wiring, booklet_meta, bill_of_materials
 }
 import from services.roomAgent { identify_rooms, RoomGuess }
 import from jaclang.byllm.lib { Image }
@@ -90,6 +91,8 @@ node ConsumerUnit {
     has design: dict[str, any] = {};
     has opts: dict[str, any] = {};
     has signature: str = "";        # devices the design was made for; differs => plan changed since wiring
+    has finalized: bool = False;
+    has finalized_at: str = "";
 }
 
 edge HasLevel: Project --> Level {}
@@ -184,6 +187,9 @@ def _get_level() -> Level {
             }
         }
     }
+    if project.name == "WireWise Residence" {
+        project.name = "LUMIRA Residence";   # default from before the LUMIRA rename
+    }
     levels = [project ->:HasLevel:->];
     if len(levels) == 0 {
         level = Level(name="Ground", order=0);
@@ -217,6 +223,18 @@ def _read_plan(level: Level) -> FloorPlan {
         }
     }
     return FloorPlan(name=projects[0].name, level=level.name, rooms=rooms, devices=devices);
+}
+
+"""Rename the project (shown in the header and on the wiring booklet)."""
+def:pub rename_project(name: str) -> FloorPlan {
+    level = _get_level();
+    clean = str(name).strip() if name else "";
+    if clean != "" {
+        for p in [root -->][?:Project] {
+            p.name = clean[:80];
+        }
+    }
+    return _read_plan(level);
 }
 
 """Load the current plan. A brand-new project starts empty so the welcome dialog shows."""
@@ -1170,6 +1188,8 @@ obj CuInfo {
     has main_switch_a: int = 30;
     has wired: bool = False;
     has stale: bool = False;
+    has finalized: bool = False;
+    has finalized_at: str = "";
     has method: str = "";
     has ambient_c: int = 30;
     has grouped: int = 1;
@@ -1250,6 +1270,8 @@ def _cu_info(level: Level, ok: bool = True, message: str = "") -> CuInfo {
     }
     info.saved = True;
     info.confirmed = cu.confirmed;
+    info.finalized = cu.finalized and len(cu.design) > 0;
+    info.finalized_at = cu.finalized_at;
     info.x = cu.x;
     info.y = cu.y;
     info.room_name = cu.room_name;
@@ -1284,7 +1306,9 @@ def _cu_info(level: Level, ok: bool = True, message: str = "") -> CuInfo {
             rcd1_a=loads.get("RCD1", 0.0), rcd2_a=loads.get("RCD2", 0.0), trust=b["trust"]
         );
         info.checks = [LayoutCheck(level=k["level"], text=k["text"], rule=k["rule"], trust=k["trust"]) for k in d["checks"] as list[dict[str, str]]];
-        info.summary = d["summary"] as str;
+        # Recomputed so designs saved before this rule also count whole-installation errors
+        levels = [c.status for c in info.circuits] + [k.level for k in info.checks];
+        info.summary = "Errors found under selected rule profile — fix the open issues, review required" if "ERROR" in levels else "Passed under selected rule profile — review required";
     }
     return info;
 }
@@ -1304,6 +1328,7 @@ def:pub confirm_cu(x: float, y: float) -> CuInfo {
     }
     if abs(cu.x - float(x)) > 1.0 or abs(cu.y - float(y)) > 1.0 {
         cu.design = {};
+        cu.finalized = False;
     }
     cu.x = float(x);
     cu.y = float(y);
@@ -1350,6 +1375,7 @@ def:pub start_wiring(method: str, ambient_c: int, grouped: int, ra_ohm: float, m
     };
     cu.opts = opts;
     cu.design = design_wiring([cu.x, cu.y], rooms, opts) as dict[str, any];
+    cu.finalized = False;
     cu.signature = _device_signature(level);
     return _cu_info(level, True, "Wiring designed.");
 }
@@ -1360,6 +1386,200 @@ def:pub clear_wiring() -> CuInfo {
     cu = _cu(level);
     if cu is not None {
         cu.design = {};
+        cu.finalized = False;
     }
     return _cu_info(level);
+}
+
+# ---- Wiring booklet ("Finalize wiring") ----
+
+obj KeyValue {
+    has key: str;
+    has value: str;
+}
+
+obj BookletRoom {
+    has name: str;
+    has room_type: str;
+    has area_m2: float;
+    has lux: int;
+    has lamp: str;
+    has lights: int;
+    has lumens: float;
+    has lumens_needed: float;
+    has achieved_lux: float;
+    has w_per_m2: float;
+    has switches: int;
+    has sockets: int;
+    has appliances: list[str];
+}
+
+obj BomLine {
+    has group: str;
+    has item: str;
+    has spec: str;
+    has qty: float;
+    has unit: str;
+    has note: str;
+    has trust: str;
+}
+
+obj Booklet {
+    has ok: bool = True;
+    has message: str = "";
+    has project: str = "";
+    has level: str = "";
+    has date: str = "";
+    has standard: str = "";
+    has profile_id: str = "";
+    has profile_status: str = "";
+    has summary: str = "";
+    has inputs: list[KeyValue] = [];
+    has totals: list[KeyValue] = [];
+    has rooms: list[BookletRoom] = [];
+    has circuits: list[CircuitInfo] = [];
+    has board: BoardInfo = BoardInfo();
+    has bom: list[BomLine] = [];
+    has checks: list[LayoutCheck] = [];
+    has issues: list[LayoutCheck] = [];
+    has plan: FloorPlan | None = None;
+    has bg_image: str = "";
+    has bg_x: float = 0.0;
+    has bg_y: float = 0.0;
+    has bg_w: float = 0.0;
+    has bg_h: float = 0.0;
+    has cu_x: float = 0.0;
+    has cu_y: float = 0.0;
+    has earthing: str = "";
+    has supply: str = "";
+    has ra_ohm: float = 0.0;
+}
+
+def _spec_num(spec: str, unit: str) -> float {
+    # "18 W LED · 1600 lm" -> 18 (unit "W") or 1600 (unit "lm")
+    parts = spec.replace("·", " ").split();
+    for i in range(1, len(parts)) {
+        if parts[i] == unit {
+            try { return float(parts[i - 1]); } except Exception { return 0.0; }
+        }
+    }
+    return 0.0;
+}
+
+def _booklet(level: Level) -> Booklet {
+    cu = _cu(level);
+    if cu is None or len(cu.design) == 0 {
+        return Booklet(ok=False, message="Start wire first: the booklet is made from the wiring design.");
+    }
+    info = _cu_info(level);
+    meta = booklet_meta() as dict[str, any];
+    bg = _background(level);
+    sized = bg != None and bg.scaled;
+    projects = [root -->][?:Project];
+    rooms_out: list[BookletRoom] = [];
+    device_rows: list[dict[str, str]] = [];
+    for room in [level ->:HasRoom:->] {
+        d = design_room(room.room_type, room.poly, (room.x, room.y, room.width, room.height), room.doors, sized) as dict[str, any];
+        lights = 0;
+        switches = 0;
+        sockets = 0;
+        lumens = 0.0;
+        watts = 0.0;
+        lamp = "";
+        apps: list[str] = [];
+        for dev in [room -->][?:Device] {
+            device_rows.append({"kind": dev.kind, "spec": dev.spec, "outlet": dev.outlet});
+            if dev.kind == LIGHT_KIND {
+                lights += 1;
+                lm = _spec_num(dev.spec, "lm");
+                lumens += lm if lm > 0.0 else d["lamp_lumens"] as float;
+                watts += dev.load_w if dev.load_w > 0.0 else _spec_num(dev.spec, "W");
+                lamp = dev.spec if dev.spec != "" else lamp;
+            } elif dev.kind == SWITCH_KIND {
+                switches += 1;
+            } elif dev.kind == SOCKET_KIND {
+                sockets += 1;
+            } elif dev.kind == PLUG_KIND {
+                apps.append(f"{dev.tag} {dev.spec}");
+            }
+        }
+        area = d["area_m2"] as float;
+        rooms_out.append(BookletRoom(
+            name=room.name, room_type=room.room_type, area_m2=area, lux=d["lux"] as int, lamp=lamp, lights=lights,
+            lumens=lumens, lumens_needed=d["lumens_needed"] as float,
+            achieved_lux=(lumens * (d["uf"] as float) * (d["mf"] as float) / area) if area > 0.0 else 0.0,
+            w_per_m2=(watts / area) if area > 0.0 else 0.0, switches=switches, sockets=sockets, appliances=apps
+        ));
+    }
+    circ_rows = [{"id": c.id, "cable": c.cable, "cpc": c.cpc, "length_m": c.length_m, "breaker": c.breaker} for c in info.circuits];
+    b = info.board;
+    board_row = {"main_a": b.main_a, "spd": b.spd, "rccb_a": b.rccb_a, "rccb_ma": b.rccb_ma, "rccb_type": b.rccb_type,
+                 "rows": b.rows, "row_modules": b.row_modules, "used_modules": b.used_modules};
+    bom = [
+        BomLine(group=l["group"], item=l["item"], spec=l["spec"], qty=l["qty"], unit=l["unit"], note=l["note"], trust=l["trust"])
+        for l in bill_of_materials(circ_rows, board_row, device_rows) as list[dict[str, any]]
+    ];
+    methods = meta["methods"] as dict[str, str];
+    opts = cu.opts;
+    inputs = [
+        KeyValue(key="Supply", value=f"{meta['voltage_v']} V, {meta['phases']}-phase, {meta['frequency_hz']} Hz"),
+        KeyValue(key="Earthing", value=f"{meta['earthing']} (earth electrode)"),
+        KeyValue(key="Earth electrode RA", value=(f"{opts['ra_ohm']} Ω" if (opts["ra_ohm"] as float) > 0.0 else "not entered")),
+        KeyValue(key="Main switch", value=f"{opts['main_a']} A"),
+        KeyValue(key="Installation method", value=methods.get(opts["method"] as str, opts["method"] as str)),
+        KeyValue(key="Ambient temperature", value=f"{opts['ambient_c']} °C"),
+        KeyValue(key="Cables grouped", value=str(opts["grouped"])),
+        KeyValue(key="Surge protection", value="Type 2 SPD" if opts["spd"] else "none"),
+        KeyValue(key="Plan scale", value="set by the user" if sized else "NOT SET: areas and lengths are assumed")
+    ];
+    total_len = sum([c.length_m for c in info.circuits]);
+    n_light = sum([r.lights for r in rooms_out]);
+    totals = [
+        KeyValue(key="Rooms", value=str(len(rooms_out))),
+        KeyValue(key="Circuits", value=str(len(info.circuits))),
+        KeyValue(key="Light points", value=str(n_light)),
+        KeyValue(key="Switches", value=str(sum([r.switches for r in rooms_out]))),
+        KeyValue(key="Socket outlets", value=str(sum([r.sockets for r in rooms_out]))),
+        KeyValue(key="Appliance outlets", value=str(sum([len(r.appliances) for r in rooms_out]))),
+        KeyValue(key="Cable (estimated)", value=f"{total_len:.0f} m")
+    ];
+    issues: list[LayoutCheck] = [k for k in info.checks if k.level == "ERROR" or k.level == "WARNING"];
+    for c in info.circuits {
+        for k in c.checks {
+            if k.level == "ERROR" or k.level == "WARNING" {
+                issues.append(LayoutCheck(level=k.level, text=f"{c.id}: {k.text}", rule=k.rule, trust=k.trust));
+            }
+        }
+    }
+    return Booklet(
+        ok=True, project=projects[0].name if len(projects) > 0 else "Project", level=level.name,
+        date=cu.finalized_at if cu.finalized_at != "" else datetime.now().strftime("%Y-%m-%d %H:%M"),
+        standard=meta["standard"] as str, profile_id=meta["profile_id"] as str, profile_status=meta["status"] as str,
+        summary=info.summary, inputs=inputs, totals=totals, rooms=rooms_out, circuits=info.circuits, board=info.board,
+        bom=bom, checks=info.checks, issues=issues, plan=_read_plan(level),
+        bg_image=bg.image if bg != None else "", bg_x=bg.x if bg != None else 0.0, bg_y=bg.y if bg != None else 0.0,
+        bg_w=bg.width if bg != None else 0.0, bg_h=bg.height if bg != None else 0.0,
+        cu_x=cu.x, cu_y=cu.y, earthing=meta["earthing"] as str,
+        supply=f"{meta['voltage_v']} V {meta['phases']}-ph {meta['frequency_hz']} Hz", ra_ohm=opts["ra_ohm"] as float
+    );
+}
+
+"""Lock the wiring design and produce the wiring booklet (refused while the plan has changed since wiring)."""
+def:pub finalize_wiring() -> Booklet {
+    level = _get_level();
+    cu = _cu(level);
+    if cu is None or len(cu.design) == 0 {
+        return Booklet(ok=False, message="Start wire first.");
+    }
+    if cu.signature != _device_signature(level) {
+        return Booklet(ok=False, message="The plan changed after wiring: Start wire again before finalizing.");
+    }
+    cu.finalized = True;
+    cu.finalized_at = datetime.now().strftime("%Y-%m-%d %H:%M");
+    return _booklet(level);
+}
+
+"""The wiring booklet for the current design."""
+def:pub get_booklet() -> Booklet {
+    return _booklet(_get_level());
 }

@@ -272,6 +272,8 @@ def design_room(room_type, poly, rect, doors, sized):
 
     return {
         "area_m2": area,
+        "uf": uf,
+        "mf": mf,
         "lux": lux or 0,
         "lamp_watts": lamp["watts"],
         "lamp_lumens": lamp["lumens"],
@@ -641,6 +643,13 @@ def _cable_key(prof, size):
     return str(size)
 
 
+def _summary(levels):
+    """Skill golden rule 3: never 'compliant'. Any ERROR (circuit or whole installation) changes the verdict."""
+    if "ERROR" in levels:
+        return "Errors found under selected rule profile — fix the open issues, review required"
+    return "Passed under selected rule profile — review required"
+
+
 def design_wiring(cu, rooms, opts):
     """Circuits, cable sizes, breakers and the consumer unit, all from the rule profile (skill design procedure).
 
@@ -882,6 +891,87 @@ def design_wiring(cu, rooms, opts):
                   "rcd_load_a": load, "trust": _trust(w["_rccb_source"])},
         "checks": inst,
         "method": method, "ca": ca, "cg": cg,
-        "summary": "Passed under selected rule profile — review required" if all(c["status"] != "ERROR" for c in circuits) else "Errors found — review the circuits below",
+        "summary": _summary([c["status"] for c in circuits] + [k["level"] for k in inst]),
     }
+
+
+
+# ---- Wiring booklet ----
+
+def booklet_meta():
+    """Standard, supply and input labels for the booklet cover."""
+    prof = _ref("rule-profile.json")
+    w = _ref("layout-defaults.json")["wiring"]
+    sup = prof["supply"]
+    return {"standard": prof["standard"], "profile_id": prof["profile_id"], "status": prof["status"],
+            "voltage_v": sup["voltage_v"], "frequency_hz": sup["frequency_hz"], "phases": sup["phases"],
+            "earthing": sup["earthing_system"], "methods": w["installation_methods"]}
+
+
+def bill_of_materials(circuits, board, devices):
+    """Cable lengths per size, protective devices and accessories.
+
+    circuits: [{cable, cpc, length_m, breaker}]; board: {main_a, spd, rccb_a, rccb_ma, rccb_type, rows, row_modules};
+    devices: [{kind, spec, outlet}]. Returns [{group, item, spec, qty, unit, note, trust}].
+    """
+    prof = _ref("rule-profile.json")
+    defs = _ref("layout-defaults.json")
+    bom = defs["bom"]
+    lines = []
+
+    def add(group, item, spec, qty, unit, note="", trust=""):
+        lines.append({"group": group, "item": item, "spec": spec, "qty": float(qty), "unit": unit, "note": note, "trust": trust})
+
+    # Cables: one line per conductor size, total of the circuits that use it
+    by_size = {}
+    for c in circuits:
+        key = (float(c["cable"]), float(c["cpc"]))
+        by_size.setdefault(key, [0.0, []])
+        by_size[key][0] += float(c["length_m"])
+        by_size[key][1].append(c["id"])
+    allow = bom["cable_allowance_pct"]
+    step = bom["round_up_to_m"]
+    for (size, cpc), (length, ids) in sorted(by_size.items()):
+        buy = math.ceil(length * (1 + allow / 100.0) / step) * step
+        add("Cables", f"Twin & earth {size:g}/{cpc:g} mm²", prof["cables"]["_type"], round(length, 1), "m",
+            f"{', '.join(ids)} · buy about {buy} m (+{allow}%)", _trust(bom["_source"]))
+    eb = prof["earthing_bonding"]
+    add("Cables", f"Earthing conductor {eb['typical_domestic_earthing_conductor_mm2']} mm²", "green/yellow, consumer unit to earth electrode",
+        0, "m", "measure on site", _trust(eb["_source"]))
+    add("Cables", f"Main protective bonding {eb['typical_main_bonding_mm2']} mm²", "green/yellow, to incoming metal water / gas pipes",
+        0, "m", "measure on site", _trust(eb["_source"]))
+
+    # Protective devices and the enclosure
+    add("Consumer unit", "Main switch", f"2-pole isolator {board['main_a']} A", 1, "pcs", "", "rule profile max_demand")
+    if board["spd"]:
+        add("Consumer unit", "Surge protective device", "Type 2, 1P+N", 1, "pcs", "", "design choice")
+    add("Consumer unit", "RCCB", f"2-pole {board['rccb_a']} A, {board['rccb_ma']} mA, Type {board['rccb_type']}", 2, "pcs",
+        "split load", _trust(defs["wiring"]["_rccb_source"]))
+    mcbs = {}
+    for c in circuits:
+        mcbs[c["breaker"]] = mcbs.get(c["breaker"], 0) + 1
+    for b in sorted(mcbs, key=lambda x: (x[0], int(x[1:]))):
+        add("Consumer unit", "MCB", f"Type {b[0]} {b[1:]} A, 1-pole, {prof['mcb_breaking_capacity_ka_typical_domestic']['value']} kA", mcbs[b], "pcs",
+            "", "rule profile circuit_templates")
+    add("Consumer unit", "Enclosure", f"{board['rows']} row(s) × {board['row_modules']} modules", 1, "pcs",
+        f"{board['used_modules']} modules used", _trust(defs["wiring"]["_board_source"]))
+    add("Consumer unit", "Earth electrode", "rod + inspection pit (TT)", 1, "pcs", "test RA after installing", _trust(prof["tt"]["_source"]))
+
+    # Accessories from the devices on the plan
+    acc = {}
+    for d in devices:
+        if d["kind"] == "Lighting point":
+            key = ("Lighting", "Light point", d["spec"] or "LED")
+        elif "switch" in d["kind"].lower():
+            key = ("Switches", "Light switch", d["spec"] or "1-gang 1-way")
+        elif d["kind"].startswith("Socket"):
+            key = ("Sockets", "Socket outlet", d["spec"] or prof["sockets"]["type"])
+        elif d["kind"] == "Plug base":
+            key = ("Appliance outlets", d["outlet"].split(" · ")[0] or "Dedicated outlet", d["spec"])
+        else:
+            continue
+        acc[key] = acc.get(key, 0) + 1
+    for (group, item, spec), n in sorted(acc.items()):
+        add(group, item, spec, n, "pcs")
+    return lines
 ::py::
