@@ -2,7 +2,7 @@ sv import from ..services.floorPlanService { FloorPlan, PlanElement, get_floor_p
 import "../styles/global.css";
 
 def:pub FloorPlanEditor() -> JsxElement {
-    has plan: any = {};
+    has plan: any = None;
     has tool: str = "Select";
     has panel: str = "Properties";
     has zoom: int = 80;
@@ -11,14 +11,22 @@ def:pub FloorPlanEditor() -> JsxElement {
     has project_name: str = "WireWise Residence";
     can with entry { load_plan(); }
 
-    async def load_plan() -> None { plan = await get_floor_plan(); }
+    async def load_plan() -> None {
+        result = await get_floor_plan();
+        if result and result.rooms {
+            plan = result;
+        } else {
+            plan = {"name": "", "level": "Ground", "rooms": [], "devices": []};
+        }
+    }
     async def place_at(e: MouseEvent) -> None {
         if plan == None { return; }
         box = (e.currentTarget as HTMLElement).getBoundingClientRect();
         px = (e.clientX - box.left) * 900.0 / box.width;
         py = (e.clientY - box.top) * 620.0 / box.height;
         if tool != "Select" and tool != "Wall" and tool != "Switch link" and tool != "Room" {
-            plan = await add_plan_element(tool, px, py);
+            result = await add_plan_element(tool, px, py);
+            if result and result.rooms { plan = result; }
         }
     }
     def zoom_in() { zoom = zoom + 10; }
@@ -35,7 +43,7 @@ def:pub FloorPlanEditor() -> JsxElement {
             <aside className="tool-rail w-52 shrink-0 overflow-y-auto border-r bg-background px-2 py-3"><div className="tool-heading">PLAN</div>{for item in tools_plan {<button key={item[0]} className={"tool-button " + ("tool-active" if tool == item[0] else "")} onClick={lambda { choose_tool(item[0]); }}><span className="tool-glyph">{item[0][:1]}</span><span className="flex-1 text-left">{item[0]}</span><kbd>{item[1]}</kbd></button>}}<div className="tool-heading mt-5">ELECTRICAL</div>{for item in tools_electrical {<button key={item[0]} className={"tool-button " + ("tool-active" if tool == item[0] else "")} onClick={lambda { choose_tool(item[0]); }}><span className="tool-glyph">{item[0][:1]}</span><span className="flex-1 truncate text-left">{item[0]}</span><kbd>{item[1]}</kbd></button>}}</aside>
             <main className="flex min-w-0 flex-1 flex-col bg-[#f3f3f0]"><div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background px-3"><button className="level-tab">Ground</button><button className="top-action">+ Level</button><span className="ml-auto text-xs text-muted-foreground">10 cm grid</span></div>
                 <div className="canvas-wrap relative flex min-h-0 flex-1 items-center justify-center overflow-hidden p-4 sm:p-8"><div className="plan-canvas relative h-full max-h-[700px] w-full max-w-[980px] overflow-hidden border bg-white shadow-sm" onClick={place_at}>
-                    {plan != None and <svg className="absolute inset-0 h-full w-full" viewBox="0 0 900 620" preserveAspectRatio="none"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e9e9e6" strokeWidth="0.7" /></pattern></defs><rect width="900" height="620" fill="url(#grid)" />{for room in plan.rooms {<g key={room.id} onClick={lambda (e: MouseEvent) { e.stopPropagation(); pick_room(room); }}><rect x={room.x} y={room.y} width={room.width} height={room.height} fill="#fff" stroke="#171717" strokeWidth="4" /><text x={room.x + 12.0} y={room.y + 25.0} fontSize="12" fontFamily="monospace" fill="#777">{room.label.upper()}</text><text x={room.x + 12.0} y={room.y + room.height} fontSize="10" fontFamily="monospace" fill="#aaa">{str(room.width / 100.0) + " × " + str(room.height / 100.0) + " m"}</text></g>}}{for device in plan.devices {<g key={device.id} transform={"translate(" + str(device.x) + " " + str(device.y) + ")"}><circle r="11" fill="#FFD600" stroke="#111" strokeWidth="2" /><text x="0" y="4" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#111">{device.label}</text></g>}}<path d="M 390 90 L 390 350 M 280 280 L 280 410" stroke="#171717" strokeWidth="4" /></svg>}
+                    {plan != None and <svg className="absolute inset-0 h-full w-full" viewBox="0 0 900 620" preserveAspectRatio="none"><defs><pattern id="grid" width="10" height="10" patternUnits="userSpaceOnUse"><path d="M 10 0 L 0 0 0 10" fill="none" stroke="#e9e9e6" strokeWidth="0.7" /></pattern></defs><rect width="900" height="620" fill="url(#grid)" />{for room in (plan.rooms or []) {<g key={room.id} onClick={lambda (e: MouseEvent) { e.stopPropagation(); pick_room(room); }}><rect x={room.x} y={room.y} width={room.width} height={room.height} fill="#fff" stroke="#171717" strokeWidth="4" /><text x={room.x + 12.0} y={room.y + 25.0} fontSize="12" fontFamily="monospace" fill="#777">{room.label.upper()}</text><text x={room.x + 12.0} y={room.y + room.height} fontSize="10" fontFamily="monospace" fill="#aaa">{str(room.width / 100.0) + " × " + str(room.height / 100.0) + " m"}</text></g>}}{for device in (plan.devices or []) {<g key={device.id} transform={"translate(" + str(device.x) + " " + str(device.y) + ")"}><circle r="11" fill="#FFD600" stroke="#111" strokeWidth="2" /><text x="0" y="4" textAnchor="middle" fontSize="8" fontFamily="monospace" fill="#111">{device.label}</text></g>}}<path d="M 390 90 L 390 350 M 280 280 L 280 410" stroke="#171717" strokeWidth="4" /></svg>}
                     {plan == None and <div className="absolute inset-0 flex items-center justify-center"><div className="border bg-white p-6 text-center shadow-sm"><div className="text-lg font-semibold">Loading sample flat</div><p className="mt-2 text-sm text-muted-foreground">Connecting to the project graph.</p></div></div>}<div className="absolute bottom-3 left-3 border bg-white/95 px-3 py-2 text-xs"><span className="font-semibold">{tool}</span><span className="ml-2 text-muted-foreground">Click canvas to place</span></div></div><div className="absolute bottom-5 right-5 flex items-center gap-1 border bg-background p-1 shadow-sm"><button className="top-action" onClick={zoom_out}>−</button><span className="min-w-12 text-center text-xs">{str(zoom)}%</span><button className="top-action" onClick={zoom_in}>+</button></div></div>
                 <footer className="flex min-h-8 flex-wrap items-center gap-5 border-t bg-background px-3 py-1.5 text-[10px] text-muted-foreground"><span>X 4.20 m</span><span>Y 2.10 m</span><span>Zoom {str(zoom)}%</span><span>Grid 10 cm</span><span className="ml-auto">Ready</span></footer></main>
             <aside className="hidden w-64 shrink-0 border-l bg-background lg:flex lg:flex-col"><div className="grid grid-cols-5 border-b">{for tab in ["Properties", "Unit", "Compliance", "Materials", "AI"] {<button key={tab} className={"panel-tab " + ("panel-tab-active" if panel == tab else "")} onClick={lambda { choose_panel(tab); }}>{tab}</button>}}</div><div className="flex-1 overflow-y-auto p-4"><div className="text-sm font-semibold">{panel}</div><p className="mt-1 text-xs text-muted-foreground">Panel tools for this floor plan.</p>{panel == "Properties" and <div className="mt-5 border-t pt-4"><div className="property-label">SELECTION</div><div className="mt-2 text-sm">{selected.label if selected != None else "Nothing selected"}</div><div className="mt-5 property-label">PROJECT STANDARD</div><div className="mt-2 text-sm">BS 7671:2018+A2:2022</div></div>}{panel == "Compliance" and <div className="mt-5 border p-3 text-xs">No issues detected</div>}{panel == "Materials" and <div className="mt-5 border p-3 text-xs">Material quantities update as devices are placed.</div>}{panel == "AI" and <div className="mt-5"><textarea className="w-full resize-none border bg-background p-3 text-xs" rows={4} placeholder="Add sockets to the kitchen per regs" /><button className="mt-2 w-full bg-[#FFD600] px-3 py-2 text-xs font-semibold text-black">Ask WireWise</button></div>}{panel == "Unit" and <div className="mt-5 border p-3 text-xs">12 ways · 100 A main switch<br />No circuits assigned yet.</div>}</div></aside>
