@@ -5,6 +5,7 @@ description = "Empty Jac project - start from scratch"
 entry-point = "main"
 kind = "web-app"
 
+
 [byllm]
 [byllm.model]
 default_model = "${LLM_MODEL:-gpt-4o-mini}"
