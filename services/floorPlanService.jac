@@ -485,12 +485,12 @@ def:pub scan_plan() -> ScanResult {
         area_m2 = (r["area"] as float) * kx * ky / 10000.0;
         share = (r["area"] as float) / total_px;
         poly: list[float] = [];
-        for pt in r["poly"] as list[list[int]] {
+        for pt in (r["poly"] as list[list[int]]) {
             poly.append(bg.x + (pt[0] as float) * kx);
             poly.append(bg.y + (pt[1] as float) * ky);
         }
         doors: list[float] = [];
-        for d in r["doors"] as list[list[float]] {
+        for d in (r["doors"] as list[list[float]]) {
             doors.append(bg.x + d[0] * kx);
             doors.append(bg.y + d[1] * ky);
             doors.append(d[2] * (kx + ky) / 2.0);
@@ -668,20 +668,20 @@ def _room_layout(room: Room, sized: bool) -> RoomLayout {
     spec = f"{d['lamp_watts']} W LED · {d['lamp_lumens']} lm";
     points: list[LayoutPoint] = [];
     n = 0;
-    for p in d["lights"] as list[list[float]] {
+    for p in (d["lights"] as list[list[float]]) {
         n += 1;
         points.append(LayoutPoint(kind=LIGHT_KIND, x=p[0], y=p[1], label=f"L{n}", spec=spec, watts=d["lamp_watts"] as float));
     }
     sw = d["switch"] as list[float];
     points.append(LayoutPoint(kind=SWITCH_KIND, x=sw[0], y=sw[1], label="SW", spec="1-gang 1-way"));
     n = 0;
-    for p in d["sockets"] as list[list[float]] {
+    for p in (d["sockets"] as list[list[float]]) {
         n += 1;
         points.append(LayoutPoint(kind=SOCKET_KIND, x=p[0], y=p[1], label=f"S{n}", spec="Twin 13 A BS 1363"));
     }
     checks = [
         LayoutCheck(level=c["level"] as str, text=c["text"] as str, rule=c["rule"] as str, trust=c["trust"] as str)
-        for c in d["checks"] as list[dict[str, str]]
+        for c in (d["checks"] as list[dict[str, str]])
     ];
     return RoomLayout(
         room_id=jid(room), name=room.name, room_type=room.room_type, area_m2=d["area_m2"] as float,
@@ -841,13 +841,13 @@ def _room_area_m2(room: Room) -> float {
     pts: list[float] = room.poly if len(room.poly) >= 6 else [
         room.x, room.y, room.x + room.width, room.y, room.x + room.width, room.y + room.height, room.x, room.y + room.height
     ];
-    acc = 0.0;
+    acc: float = 0.0;
     n = len(pts) // 2;
     for i in range(n) {
         j = (i + 1) % n;
         acc += pts[2 * i] * pts[2 * j + 1] - pts[2 * j] * pts[2 * i + 1];
     }
-    return abs(acc) / 2.0 / 10000.0;
+    return (acc if acc >= 0.0 else -acc) / 2.0 / 10000.0;
 }
 
 def _room_tag(room: Room, prefix: str) -> str {
@@ -906,9 +906,9 @@ def _loads_result(level: Level, ok: bool = True, message: str = "") -> LoadsResu
     ac_rooms: list[AcOption] = [];
     baths: list[RoomRef] = [];
     kitchen: RoomRef | None = None;
-    refs: list[RoomRef] = [];
+    room_refs: list[RoomRef] = [];   # not "refs": jac 0.34 compiles graph queries to a refs() helper
     for room in rooms {
-        refs.append(RoomRef(room_id=jid(room), name=room.name, room_type=room.room_type));
+        room_refs.append(RoomRef(room_id=jid(room), name=room.name, room_type=room.room_type));
         if room.room_type == "bathroom" or room.room_type == "wc" {
             baths.append(RoomRef(room_id=jid(room), name=room.name, room_type=room.room_type, tag=_room_tag(room, "WH")));
         } elif room.room_type == "kitchen" and kitchen is None {
@@ -933,19 +933,19 @@ def _loads_result(level: Level, ok: bool = True, message: str = "") -> LoadsResu
     catalog = [
         CatalogGroup(id=g["id"], name=g["name"], items=[
             CatalogItem(id=i["id"], name=i["name"], tag=i["tag"], watts=i["watts"], outlet=i["outlet"], trust=i["trust"])
-            for i in g["items"] as list[dict[str, any]]
+            for i in (g["items"] as list[dict[str, any]])
         ])
-        for g in load_catalog() as list[dict[str, any]]
+        for g in (load_catalog() as list[dict[str, any]])
     ];
     md = max_demand(lighting_w, socket_rooms, demand_loads) as dict[str, any];
     demand = DemandInfo(
-        rows=[DemandRow(name=r["name"], connected_w=r["connected_w"], demand_w=r["demand_w"], rule=r["rule"]) for r in md["rows"] as list[dict[str, any]]],
+        rows=[DemandRow(name=r["name"], connected_w=r["connected_w"], demand_w=r["demand_w"], rule=r["rule"]) for r in (md["rows"] as list[dict[str, any]])],
         total_w=md["total_w"] as float, ib_a=md["ib_a"] as float, main_a=md["main_a"] as float, pct=md["pct"] as float,
         level=md["level"] as str, fixes=md["fixes"] as list[str], trust=md["trust"] as str, main_trust=md["main_trust"] as str
     );
     return LoadsResult(
         ok=ok, message=message, sized=bg != None and bg.scaled, loads=loads, ac_rooms=ac_rooms, bathrooms=baths,
-        kitchen=kitchen, rooms=refs, pump_tag=pump_tag, wm_tag=wm_tag, catalog=catalog, demand=demand, plan=_read_plan(level)
+        kitchen=kitchen, rooms=room_refs, pump_tag=pump_tag, wm_tag=wm_tag, catalog=catalog, demand=demand, plan=_read_plan(level)
     );
 }
 
@@ -1012,7 +1012,7 @@ def _plan_spot(level: Level, room: Room, item: dict[str, any], item_id: str, lab
     rect = (room.x, room.y, room.width, room.height);
     if item_id.startswith("pump") {
         # The pump sits outside; only its switch and outlet go in the kitchen, by the door
-        (plug_xy, found) = place_by_door(room.poly, rect, room.doors, taken, False);
+        (plug_xy, found) = place_by_door(room.poly, rect, room.doors, taken, False) as tuple[list[float], bool];
         where = f"{room.name}, by the door" if found else f"{room.name} (door not found: move it next to the door)";
         return _Spot(app=[], plug=plug_xy, where=where, notes=[]);
     }
@@ -1254,7 +1254,7 @@ def _cu_info(level: Level, ok: bool = True, message: str = "") -> CuInfo {
     o = wiring_options() as dict[str, any];
     info = CuInfo(
         ok=ok, message=message, has_rooms=len([level ->:HasRoom:->]) > 0,
-        methods=[MethodOption(id=m["id"], label=m["label"]) for m in o["methods"] as list[dict[str, str]]],
+        methods=[MethodOption(id=m["id"], label=m["label"]) for m in (o["methods"] as list[dict[str, str]])],
         methods_trust=o["methods_trust"] as str, ambients=o["ambients"] as list[int], groupings=o["groupings"] as list[int],
         main_switch_a=o["main_switch_a"] as int
     );
@@ -1299,7 +1299,7 @@ def _cu_info(level: Level, ok: bool = True, message: str = "") -> CuInfo {
                 path=[v for pt in c["path"] for v in pt],
                 checks=[LayoutCheck(level=k["level"], text=k["text"], rule=k["rule"], trust=k["trust"]) for k in c["checks"]]
             )
-            for c in d["circuits"] as list[dict[str, any]]
+            for c in (d["circuits"] as list[dict[str, any]])
         ];
         b = d["board"] as dict[str, any];
         loads = b["rcd_load_a"] as dict[str, float];
@@ -1308,7 +1308,7 @@ def _cu_info(level: Level, ok: bool = True, message: str = "") -> CuInfo {
             row_modules=b["row_modules"], used_modules=b["used_modules"], spare_pct=b["spare_pct"],
             rcd1_a=loads.get("RCD1", 0.0), rcd2_a=loads.get("RCD2", 0.0), trust=b["trust"]
         );
-        info.checks = [LayoutCheck(level=k["level"], text=k["text"], rule=k["rule"], trust=k["trust"]) for k in d["checks"] as list[dict[str, str]]];
+        info.checks = [LayoutCheck(level=k["level"], text=k["text"], rule=k["rule"], trust=k["trust"]) for k in (d["checks"] as list[dict[str, str]])];
         # Recomputed so designs saved before this rule also count whole-installation errors
         levels = [c.status for c in info.circuits] + [k.level for k in info.checks];
         info.summary = "Errors found under selected rule profile — fix the open issues, review required" if "ERROR" in levels else "Passed under selected rule profile — review required";
@@ -1520,7 +1520,7 @@ def _booklet(level: Level) -> Booklet {
                  "rows": b.rows, "row_modules": b.row_modules, "used_modules": b.used_modules};
     bom = [
         BomLine(group=l["group"], item=l["item"], spec=l["spec"], qty=l["qty"], unit=l["unit"], note=l["note"], trust=l["trust"])
-        for l in bill_of_materials(circ_rows, board_row, device_rows) as list[dict[str, any]]
+        for l in (bill_of_materials(circ_rows, board_row, device_rows) as list[dict[str, any]])
     ];
     methods = meta["methods"] as dict[str, str];
     opts = cu.opts;

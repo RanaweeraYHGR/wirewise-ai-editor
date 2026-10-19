@@ -1,4 +1,4 @@
-import from ..services.floorPlanService { LayoutResult, RoomLayout, LayoutCheck }
+sv import from ..services.floorPlanService { LayoutResult, RoomLayout, LayoutCheck }
 
 def level_class(c: LayoutCheck) -> str {
     return "wl-lvl wl-lvl-" + c.level.lower();

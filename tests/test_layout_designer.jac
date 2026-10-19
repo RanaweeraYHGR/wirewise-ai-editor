@@ -22,14 +22,14 @@ test "bedroom uses the lumen method from the rule profile" {
 test "bathroom gets no sockets and Section 701 notes" {
     d = _design("bathroom");
     assert len(d["sockets"] as list) == 0;
-    rules = " ".join([c["rule"] for c in d["checks"] as list[dict[str, str]]]);
+    rules = " ".join([c["rule"] for c in (d["checks"] as list[dict[str, str]])]);
     assert "701" in rules;
 }
 
 test "room type without a lux target warns instead of inventing one" {
     d = _design("utility");
     assert len(d["lights"] as list) == 1;
-    texts = " ".join([c["text"] for c in d["checks"] as list[dict[str, str]]]);
+    texts = " ".join([c["text"] for c in (d["checks"] as list[dict[str, str]])]);
     assert "not in rule profile" in texts;
 }
 

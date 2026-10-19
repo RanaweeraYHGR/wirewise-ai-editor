@@ -1,4 +1,4 @@
-import from ..services.floorPlanService { Booklet, BookletRoom, BomLine, KeyValue, CircuitInfo, LayoutCheck, PlanElement }
+sv import from ..services.floorPlanService { Booklet, BookletRoom, BomLine, KeyValue, CircuitInfo, LayoutCheck, PlanElement }
 import from .DeviceSymbol { DeviceSymbol }
 
 glob BOM_GROUPS: list[str] = ["Cables", "Consumer unit", "Lighting", "Switches", "Sockets", "Appliance outlets"];
@@ -19,6 +19,20 @@ obj Col {
 obj BomGroup {
     has name: str;
     has lines: list[BomLine];
+}
+
+# Smallest / largest value. Not min(list) / max(list): jac 0.34 compiles those to
+# Math.min(array), which is NaN in the browser.
+def list_min(xs: list[float]) -> float {
+    m = xs[0];
+    for v in xs { if v < m { m = v; } }
+    return m;
+}
+
+def list_max(xs: list[float]) -> float {
+    m = xs[0];
+    for v in xs { if v > m { m = v; } }
+    return m;
 }
 
 def pts(p: list[float]) -> str {
@@ -131,10 +145,10 @@ def:pub WiringSchematic(b: Booklet) -> JsxElement {
         xs = xs + [b.bg_x, b.bg_x + b.bg_w];
         ys = ys + [b.bg_y, b.bg_y + b.bg_h];
     }
-    x0 = min(xs) - 40.0;
-    y0 = min(ys) - 40.0;
-    vw = max(xs) - x0 + 40.0;
-    vh = max(ys) - y0 + 40.0;
+    x0 = list_min(xs) - 40.0;
+    y0 = list_min(ys) - 40.0;
+    vw = list_max(xs) - x0 + 40.0;
+    vh = list_max(ys) - y0 + 40.0;
     return <svg className="bk-plan" viewBox={f"{x0} {y0} {vw} {vh}"} xmlns="http://www.w3.org/2000/svg">
         <rect x={str(x0)} y={str(y0)} width={str(vw)} height={str(vh)} fill="#fff" />
         {b.bg_image != "" and <image href={b.bg_image} x={b.bg_x} y={b.bg_y} width={b.bg_w} height={b.bg_h} opacity="0.45" preserveAspectRatio="none" />}

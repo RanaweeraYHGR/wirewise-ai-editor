@@ -1,4 +1,4 @@
-import from ..services.floorPlanService {
+sv import from ..services.floorPlanService {
     FloorPlan, PlanElement, get_floor_plan, add_plan_element,
     start_blank_plan, load_sample_flat, add_room,
     BackgroundInfo, get_background, import_background, set_background_scale, clear_background,
@@ -20,6 +20,20 @@ import "../styles/global.css";
 glob ACCEPT_FILES: str = ".png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.svg,.pdf,.dxf,.dwg";
 glob MAX_FILE_MB: int = 20;
 glob EMPTY_PLAN: dict[str, any] = {"name": "", "level": "Ground", "rooms": [], "devices": []};
+
+# Smallest / largest value. Not min(list) / max(list): jac 0.34 compiles those to
+# Math.min(array), which is NaN in the browser.
+def list_min(xs: list[float]) -> float {
+    m = xs[0];
+    for v in xs { if v < m { m = v; } }
+    return m;
+}
+
+def list_max(xs: list[float]) -> float {
+    m = xs[0];
+    for v in xs { if v > m { m = v; } }
+    return m;
+}
 
 def:pub FloorPlanEditor() -> JsxElement {
     has plan: any = None;
@@ -98,9 +112,10 @@ def:pub FloorPlanEditor() -> JsxElement {
         set_plan(result);
         set_bg(await get_background());
         suggestions = (await get_suggestions()).suggestions;
-        if plan != None and plan.rooms {
+        # Use the fetched value, not the state just written: jac 0.34 state reads see the previous render
+        if result and result.rooms {
             layout = await preview_layout();   # so step 2 knows whether a layout is already placed
-            set_cu(await get_cu());            # show a saved consumer unit and its wiring
+            set_cu(await get_cu(), True);      # show a saved consumer unit and its wiring
         }
         # Always show the welcome dialog when the page loads
         show_welcome = True;
@@ -241,10 +256,11 @@ def:pub FloorPlanEditor() -> JsxElement {
 
     async def apply_rooms() -> None {
         set_plan(await apply_suggestions());
-        suggestions = (await get_suggestions()).suggestions;
+        left = (await get_suggestions()).suggestions;
+        suggestions = left;
         active_sug = "";
         scan_msg = "Rooms added to the plan.";
-        if len(suggestions) == 0 {
+        if len(left) == 0 {
             await show_layout();
         }
     }
@@ -352,9 +368,11 @@ def:pub FloorPlanEditor() -> JsxElement {
     def set_hl(tag: str) { hl_tag = tag; }
 
     # ---- Step 4: consumer unit and wiring ----
-    def set_cu(info: CuInfo) {
+    # reset: put the symbol back at the stored/suggested spot (passed in, because a state write
+    # made just before this call is not visible yet on jac 0.34)
+    def set_cu(info: CuInfo, reset: bool) {
         cu_info = info;
-        if not cu_moved or info.confirmed {
+        if reset or info.confirmed {
             cu_xy = [info.x, info.y];
             cu_moved = False;
         }
@@ -387,20 +405,18 @@ def:pub FloorPlanEditor() -> JsxElement {
     async def open_cu() -> None {
         panel = "AI";
         ai_view = "cu";
-        cu_moved = False;
-        set_cu(await get_cu());
+        set_cu(await get_cu(), True);
     }
 
     async def confirm_cu_here() -> None {
         if len(cu_xy) != 2 { return; }
         cu_busy = True;
-        cu_moved = False;
-        set_cu(await confirm_cu(cu_xy[0], cu_xy[1]));
+        set_cu(await confirm_cu(cu_xy[0], cu_xy[1]), True);
         cu_busy = False;
     }
 
     async def unlock_cu() -> None {
-        set_cu(await move_cu());
+        set_cu(await move_cu(), False);
     }
 
     def reset_cu() {
@@ -412,12 +428,12 @@ def:pub FloorPlanEditor() -> JsxElement {
 
     async def wire_now(method: str, ambient: int, grouped: int, ra: float, main_a: int, spd: bool) -> None {
         cu_busy = True;
-        set_cu(await start_wiring(method, ambient, grouped, ra, main_a, spd));
+        set_cu(await start_wiring(method, ambient, grouped, ra, main_a, spd), False);
         cu_busy = False;
     }
 
     async def unwire() -> None {
-        set_cu(await clear_wiring());
+        set_cu(await clear_wiring(), False);
     }
 
     def set_hl_circuit(cid: str) { hl_circuit = cid; }
@@ -430,7 +446,7 @@ def:pub FloorPlanEditor() -> JsxElement {
         if res.ok {
             booklet = res;
             show_booklet = True;
-            set_cu(await get_cu());
+            set_cu(await get_cu(), False);
         } else {
             scan_msg = res.message;
             import_msg = res.message;
@@ -629,8 +645,8 @@ def:pub FloorPlanEditor() -> JsxElement {
     pv_room = pending.room_name if pending is not None else "";
     pv_poly: list[float] = pending.poly if pending is not None else [];
     pv_has_app = show_pv and pending is not None and pending.has_appliance and len(pv_app) == 2;
-    pv_lx = min([pv_poly[i] for i in range(0, len(pv_poly), 2)]) if len(pv_poly) >= 2 else 0.0;
-    pv_ly = max([pv_poly[i] for i in range(1, len(pv_poly), 2)]) if len(pv_poly) >= 2 else 0.0;   # label sits on the bottom edge
+    pv_lx = list_min([pv_poly[i] for i in range(0, len(pv_poly), 2)]) if len(pv_poly) >= 2 else 0.0;
+    pv_ly = list_max([pv_poly[i] for i in range(1, len(pv_poly), 2)]) if len(pv_poly) >= 2 else 0.0;   # label sits on the bottom edge
     pv_label = f"{pv_tag} WILL GO HERE · {pv_room.upper()}";
     if show_pv and not scanning {
         banner = f"{pv_tag} → {pv_room}: drag it or its plug to move, then Add";
