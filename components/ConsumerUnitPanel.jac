@@ -1,4 +1,4 @@
-import from ..services.floorPlanService { CuInfo, CircuitInfo, BoardInfo, LayoutCheck }
+sv import from ..services.floorPlanService { CuInfo, CircuitInfo, BoardInfo, LayoutCheck }
 
 # One DIN-rail module on the drawn board
 obj Module {
@@ -30,6 +30,11 @@ def board_modules(board: BoardInfo, circuits: list[CircuitInfo]) -> list[Module]
         mods.append(Module(kind="spare", width=1, top="", big="", small="", label=""));
     }
     return mods;
+}
+
+def find_circuit(circuits: list[CircuitInfo], cid: str) -> CircuitInfo | None {
+    for c in circuits { if c.id == cid { return c; } }
+    return None;
 }
 
 def short_name(c: CircuitInfo) -> str {
@@ -97,10 +102,7 @@ def:pub ConsumerUnitPanel(
     v_ra = ra if ra != "" else (str(cu.ra_ohm) if cu is not None and cu.ra_ohm > 0.0 else "");
     v_main = main_a if main_a != "" else str(cu.main_switch_a if cu is not None else 30);
     v_spd = spd if spd_set else (cu is not None and cu.spd);
-    opened: CircuitInfo | None = None;
-    for c in circuits {
-        if c.id == open_c { opened = c; }
-    }
+    opened: CircuitInfo | None = find_circuit(circuits, open_c);
     opened_title = (opened.id + " · " + opened.name) if opened is not None else "";
     opened_checks: list[LayoutCheck] = opened.checks if opened is not None else [];
     show_form = cu is not None and cu.confirmed and (not cu.wired or form_open or cu.stale);

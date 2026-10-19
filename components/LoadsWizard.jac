@@ -1,4 +1,4 @@
-import from ..services.floorPlanService { LoadsResult, LoadInfo, AcOption, RoomRef, CatalogGroup, CatalogItem, DemandInfo, LoadPreview }
+sv import from ..services.floorPlanService { LoadsResult, LoadInfo, AcOption, RoomRef, CatalogGroup, CatalogItem, DemandInfo, LoadPreview }
 
 # One question in the appliance sequence: kind is "ac" | "pump" | "wh" | "wm" | "custom"
 obj Question {
@@ -20,6 +20,16 @@ def build_questions(data: LoadsResult) -> list[Question] {
     }
     qs.append(Question(kind="custom"));
     return qs;
+}
+
+def find_ac(options: list[AcOption], room_id: str) -> AcOption | None {
+    for a in options { if a.room_id == room_id { return a; } }
+    return None;
+}
+
+def find_room(rooms: list[RoomRef], room_id: str) -> RoomRef | None {
+    for r in rooms { if r.room_id == room_id { return r; } }
+    return None;
 }
 
 def fmt_w(w: float) -> str {
@@ -66,12 +76,10 @@ def:pub LoadsWizard(
     demand_fixes: list[str] = demand.fixes if demand is not None else [];
     active_cat = cat_id if cat_id != "" else (groups[0].id if len(groups) > 0 else "");
 
-    ac: AcOption | None = None;
-    bath: RoomRef | None = None;
-    if q is not None {
-        for a in ac_rooms { if a.room_id == q.room_id { ac = a; } }
-        for b in baths { if b.room_id == q.room_id { bath = b; } }
-    }
+    q_room = q.room_id if q is not None else "";
+    q_kind = q.kind if q is not None else "";
+    ac: AcOption | None = find_ac(ac_rooms, q_room);
+    bath: RoomRef | None = find_room(baths, q_room);
     picked: CatalogItem | None = None;
     active_items: list[CatalogItem] = [];
     for g in groups {
@@ -86,20 +94,25 @@ def:pub LoadsWizard(
     # What the current question would add, so the plan can show where it goes before the user says yes
     preview_item = "";
     preview_room = "";
-    if q is not None and data is not None {
-        if q.kind == "ac" and ac is not None and ac.tag == "" {
-            preview_item = f"ac_{ac.size_btu}";
+    pump_tag = data.pump_tag if data is not None else "x";
+    wm_tag = data.wm_tag if data is not None else "x";
+    ac_free = ac.tag == "" if ac is not None else False;
+    ac_size = ac.size_btu if ac is not None else 0;
+    bath_free = bath.tag == "" if bath is not None else False;
+    if data is not None {
+        if q_kind == "ac" and ac_free {
+            preview_item = f"ac_{ac_size}";
             preview_room = ac_id;
-        } elif q.kind == "pump" and data.pump_tag == "" and kitchen_id != "" {
+        } elif q_kind == "pump" and pump_tag == "" and kitchen_id != "" {
             preview_item = "pump_1hp";
             preview_room = kitchen_id;
-        } elif q.kind == "wh" and bath is not None and bath.tag == "" {
+        } elif q_kind == "wh" and bath_free {
             preview_item = "water_heater_instant";
             preview_room = bath_id;
-        } elif q.kind == "wm" and data.wm_tag == "" and kitchen_id != "" {
+        } elif q_kind == "wm" and wm_tag == "" and kitchen_id != "" {
             preview_item = "washing_machine";
             preview_room = kitchen_id;
-        } elif q.kind == "custom" and pick_id != "" and pick_room != "" {
+        } elif q_kind == "custom" and pick_id != "" and pick_room != "" {
             preview_item = pick_id;
             preview_room = pick_room;
         }

@@ -21,7 +21,7 @@ test "a pump is a heavy motor load on a type C breaker" {
     pump = find_item("pump_1hp") as dict[str, any];
     p = protection(pump, pump["watts"] as float) as dict[str, any];
     assert (p["breaker"] as str).startswith("C");
-    assert any([c["level"] == "INFO" and "motor" in c["text"] for c in p["checks"] as list[dict[str, str]]]);
+    assert any([c["level"] == "INFO" and "motor" in c["text"] for c in (p["checks"] as list[dict[str, str]])]);
 }
 
 test "maximum demand applies the profile diversity and flags an overloaded main switch" {
@@ -38,6 +38,6 @@ test "maximum demand applies the profile diversity and flags an overloaded main 
 
 test "a switch outside the room lands outside, next to the door" {
     sq = [0.0, 0.0, 300.0, 0.0, 300.0, 300.0, 0.0, 300.0];
-    (p, found) = place_by_door(sq, (0.0, 0.0, 300.0, 300.0), [150.0, 300.0, 90.0], [], True);
+    (p, found) = place_by_door(sq, (0.0, 0.0, 300.0, 300.0), [150.0, 300.0, 90.0], [], True) as tuple[list[float], bool];
     assert found and p[1] > 300.0 and abs(p[0] - 150.0) < 120.0, f"not outside by the door: {p}";
 }

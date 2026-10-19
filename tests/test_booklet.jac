@@ -13,7 +13,7 @@ test "cables are totalled per size and MCBs counted per rating" {
     lines = bill_of_materials(circuits, board, devices) as list[dict[str, any]];
     t15 = [l for l in lines if l["item"] == "Twin & earth 1.5/1 mm²"][0];
     assert abs((t15["qty"] as float) - 32.5) < 0.01;
-    b6 = [l for l in lines if l["item"] == "MCB" and "B 6 A" in l["spec"]][0];
+    b6 = [l for l in lines if l["item"] == "MCB" and "B 6 A" in str(l["spec"])][0];
     assert b6["qty"] == 2.0;
     assert len([l for l in lines if l["item"] == "RCCB" and l["qty"] == 2.0]) == 1;
     assert len([l for l in lines if l["item"] == "Surge protective device"]) == 0, "no SPD when not ticked";

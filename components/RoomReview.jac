@@ -1,4 +1,4 @@
-import from ..services.floorPlanService { SuggestionInfo }
+sv import from ..services.floorPlanService { SuggestionInfo }
 
 # Room types the user can pick (value, label) - values match services/roomAgent RoomType
 glob ROOM_TYPES: list[list[str]] = [

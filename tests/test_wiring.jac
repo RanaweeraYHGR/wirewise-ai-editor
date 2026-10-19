@@ -35,10 +35,10 @@ test "circuits follow 314.1 and sizes come from the rule profile" {
 
 test "the bathroom never gets a lighting circuit of its own" {
     d = design_wiring([450.0, 20.0], _house(), {"method": "C", "ambient_c": 30, "grouped": 1, "ra_ohm": 0.0, "main_a": 30, "spd": False}) as dict[str, any];
-    for c in d["circuits"] as list[dict[str, any]] {
+    for c in (d["circuits"] as list[dict[str, any]]) {
         if c["kind"] == "lighting" { assert c["rooms"] != ["Bath"]; }
     }
-    texts = " ".join([k["text"] for k in d["checks"] as list[dict[str, str]]]);
+    texts = " ".join([k["text"] for k in (d["checks"] as list[dict[str, str]])]);
     assert "RA not entered" in texts, "missing RA must be a warning, not an assumption";
 }
 
@@ -46,9 +46,9 @@ test "hot, grouped, insulated runs upsize the cable instead of failing silently"
     rooms = [_room("Hall", "hall", 0.0, 6, 1)];
     rooms[0]["sockets"] = [[4000.0 + 10.0 * i, 2500.0] for i in range(6)];   # far from the consumer unit
     d = design_wiring([0.0, 0.0], rooms, {"method": "A", "ambient_c": 45, "grouped": 4, "ra_ohm": 50.0, "main_a": 30, "spd": False}) as dict[str, any];
-    skt = [c for c in d["circuits"] as list[dict[str, any]] if c["kind"] == "sockets"][0];
+    skt = [c for c in (d["circuits"] as list[dict[str, any]]) if c["kind"] == "sockets"][0];
     assert skt["cable"] > 2.5 or skt["status"] == "ERROR";
-    assert any([k["level"] in ["WARNING", "ERROR"] for k in skt["checks"] as list[dict[str, str]]]);
+    assert any([k["level"] in ["WARNING", "ERROR"] for k in (skt["checks"] as list[dict[str, str]])]);
 }
 
 test "the consumer unit is never suggested in a bathroom" {
