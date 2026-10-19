@@ -108,6 +108,7 @@ def:pub FloorPlanEditor() -> JsxElement {
 
     # ---- Welcome dialog actions ----
     async def draw_room_start() -> None {
+        forget_design();
         set_plan(await start_blank_plan());
         await clear_background();
         bg = None;
@@ -117,6 +118,7 @@ def:pub FloorPlanEditor() -> JsxElement {
     }
 
     async def view_sample() -> None {
+        forget_design();
         set_plan(await load_sample_flat());
         await clear_background();
         bg = None;
@@ -155,6 +157,7 @@ def:pub FloorPlanEditor() -> JsxElement {
             import_msg = res.message;
             return;
         }
+        forget_design();
         set_plan(await start_blank_plan());
         set_bg(res);
         import_msg = res.message;
@@ -356,6 +359,29 @@ def:pub FloorPlanEditor() -> JsxElement {
             cu_moved = False;
         }
         if not info.ok and info.message != "" { scan_msg = info.message; }
+    }
+
+    # A new plan starts clean: drop everything the editor still holds from the previous one
+    # (layout preview, appliance questions, consumer unit, wiring, booklet), not just the rooms
+    def forget_design() -> None {
+        selected = None;
+        suggestions = [];
+        active_sug = "";
+        scan_msg = "";
+        layout = None;
+        ai_view = "auto";
+        loads_data = None;
+        hl_tag = "";
+        pending = None;
+        pv_app = [];
+        pv_plug = [];
+        pv_moved = False;
+        cu_info = None;
+        cu_xy = [];
+        cu_moved = False;
+        hl_circuit = "";
+        booklet = None;
+        show_booklet = False;
     }
 
     async def open_cu() -> None {

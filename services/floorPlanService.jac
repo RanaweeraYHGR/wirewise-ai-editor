@@ -204,6 +204,9 @@ def _clear_level(level: Level) -> None {
     for cu in [level -->][?:ConsumerUnit] {
         del cu;
     }
+    for sug in [level -->][?:RoomSuggestion] {
+        del sug;
+    }
     for room in [level ->:HasRoom:->] {
         for device in [room -->][?:Device] {
             del device;
