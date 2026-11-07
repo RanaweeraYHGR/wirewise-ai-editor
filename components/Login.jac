@@ -1,5 +1,4 @@
-import from "@jac/runtime" { Link, useNavigate }
-import from ..services.authService { sign_in }
+import from "@jac/runtime" { Link, useNavigate, jacLogin }
 import from .ui.button { Button }
 import from .ui.input { Input }
 
@@ -19,7 +18,7 @@ def:pub Login() -> JsxElement {
         }
         busy = True;
         ok: bool = False;
-        ok = await sign_in(email.strip(), password);
+        ok = await jacLogin(email.strip(), password);
         busy = False;
         if ok { nav("/"); }
         else { message = "Email or password is incorrect."; }

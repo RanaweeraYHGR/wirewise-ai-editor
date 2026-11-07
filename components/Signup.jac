@@ -1,5 +1,4 @@
-import from "@jac/runtime" { Link, useNavigate }
-import from ..services.authService { sign_up }
+import from "@jac/runtime" { Link, useNavigate, jacLogin, jacSignup }
 import from .ui.button { Button }
 import from .ui.input { Input }
 
@@ -18,11 +17,18 @@ def:pub Signup() -> JsxElement {
             return;
         }
         busy = True;
-        result: str = "";
-        result = await sign_up(email.strip(), password);
+        signup_result: dict | None = None;
+        logged_in: bool = False;
+        signup_result = await jacSignup(email.strip(), password);
+        if not signup_result["success"] {
+            busy = False;
+            message = signup_result["error"] as str;
+            return;
+        }
+        logged_in = await jacLogin(email.strip(), password);
         busy = False;
-        if result == "success" { nav("/"); }
-        else { message = result; }
+        if logged_in { nav("/"); }
+        else { message = "Account created, but sign in failed. Please sign in."; }
     }
 
     return <div className="grid min-h-svh bg-muted/40 lg:grid-cols-2">
