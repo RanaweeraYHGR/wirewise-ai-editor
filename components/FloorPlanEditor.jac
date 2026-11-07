@@ -15,6 +15,8 @@ import from .LoadsWizard { LoadsWizard }
 import from .ConsumerUnitPanel { ConsumerUnitPanel }
 import from .WiringBooklet { WiringBooklet }
 import "../styles/global.css";
+import from ..services.authService { get_auth_session, sign_out }
+import from "@jac/runtime" { Navigate, useNavigate }
 
 # Formats the Import button accepts (DWG is accepted only to show a "save as DXF" hint)
 glob ACCEPT_FILES: str = ".png,.jpg,.jpeg,.gif,.webp,.bmp,.tif,.tiff,.svg,.pdf,.dxf,.dwg";
@@ -36,6 +38,8 @@ def list_max(xs: list[float]) -> float {
 }
 
 def:pub FloorPlanEditor() -> JsxElement {
+    nav = useNavigate();
+    if not get_auth_session() { return <Navigate to="/login" replace={True} />; }
     has plan: any = None;
     has tool: str = "Select";
     has panel: str = "Properties";
@@ -661,7 +665,7 @@ def:pub FloorPlanEditor() -> JsxElement {
     }
 
     return <div className={"wirewise flex h-svh flex-col " + ("is-dark" if dark else "")}>
-        <header className="flex min-h-14 flex-wrap items-center gap-3 border-b bg-background px-4 py-2"><div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center bg-[#FFD600] text-black font-black">L</div><span className="font-bold">LUMIRA</span></div><span>/</span><input aria-label="Project name" className="w-40 bg-transparent text-sm outline-none sm:w-52" value={project_name} onChange={lambda (e: ChangeEvent) { project_name = e.target.value; }} onBlur={save_name} /><span className="text-xs text-muted-foreground">● Saved</span><div className="ml-auto flex items-center gap-1"><button className="top-action">↶</button><button className="top-action">↷</button><button className="top-action hidden sm:block">Fit</button><button className="top-action hidden md:block" onClick={lambda { panel = "AI"; }}>Ask AI Ctrl+K</button><button className="top-action hidden md:block" onClick={lambda { show_welcome = True; }}>New plan</button><button className="top-action" onClick={toggle_theme}>◐</button><button className="export-action" onClick={open_booklet}>Export PDF</button></div></header>
+        <header className="flex min-h-14 flex-wrap items-center gap-3 border-b bg-background px-4 py-2"><div className="flex items-center gap-2"><div className="flex size-8 items-center justify-center bg-[#FFD600] text-black font-black">L</div><span className="font-bold">LUMIRA</span></div><span>/</span><input aria-label="Project name" className="w-40 bg-transparent text-sm outline-none sm:w-52" value={project_name} onChange={lambda (e: ChangeEvent) { project_name = e.target.value; }} onBlur={save_name} /><span className="text-xs text-muted-foreground">● Saved</span><div className="ml-auto flex items-center gap-1"><button className="top-action">↶</button><button className="top-action">↷</button><button className="top-action hidden sm:block">Fit</button><button className="top-action hidden md:block" onClick={lambda { panel = "AI"; }}>Ask AI Ctrl+K</button><button className="top-action hidden md:block" onClick={lambda { show_welcome = True; }}>New plan</button><button className="top-action" onClick={toggle_theme}>◐</button><button className="export-action" onClick={open_booklet}>Export PDF</button><button className="top-action" onClick={lambda { sign_out(); nav("/login"); }}>Sign out</button></div></header>
         <div className="flex min-h-0 flex-1">
             <aside className="tool-rail w-52 shrink-0 overflow-y-auto border-r bg-background px-2 py-3"><div className="tool-heading">PLAN</div>{for item in tools_plan {<button key={item[0]} className={"tool-button " + ("tool-active" if tool == item[0] else "")} onClick={lambda { choose_tool(item[0]); }}><span className="tool-glyph">{item[0][:1]}</span><span className="flex-1 text-left">{item[0]}</span><kbd>{item[1]}</kbd></button>}}<div className="tool-heading mt-5">ELECTRICAL</div>{for item in tools_electrical {<button key={item[0]} className={"tool-button " + ("tool-active" if tool == item[0] else "")} onClick={lambda { choose_tool(item[0]); }}><span className="tool-glyph">{item[0][:1]}</span><span className="flex-1 truncate text-left">{item[0]}</span><kbd>{item[1]}</kbd></button>}}</aside>
             <main className="flex min-w-0 flex-1 flex-col bg-[#f3f3f0]"><div className="flex h-11 shrink-0 items-center gap-2 border-b bg-background px-3"><button className="level-tab">Ground</button><button className="top-action">+ Level</button>{bg != None and <span className="flex shrink-0 items-center gap-1 whitespace-nowrap"><span className="ml-2 border px-2 py-0.5 text-[10px]">{bg_label}</span><button className={"top-action " + ("tool-active" if tool == "Scale" else "")} onClick={lambda { tool = "Scale"; scale_pts = []; }}>Set scale</button><button className="top-action" onClick={remove_background}>Remove plan</button><button className="wire-action" disabled={scanning} onClick={suggest_wiring}><span aria-hidden="true">ϟ</span>{"Scanning…" if scanning else "Suggest wiring"}</button></span>}<span className="ml-auto truncate text-xs text-muted-foreground">{import_msg if import_msg != "" else "10 cm grid"}</span></div>
