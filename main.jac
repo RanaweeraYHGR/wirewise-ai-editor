@@ -8,9 +8,17 @@ import from services.floorPlanService {
     add_load, add_ac, remove_load, get_cu, confirm_cu, move_cu, start_wiring, clear_wiring,
     finalize_wiring, get_booklet
 }
+import from .components.Login { Login }
+import from .components.Signup { Signup }
 import from .components.FloorPlanEditor { FloorPlanEditor }
+import from "@jac/runtime" { Router, Routes, Route, Navigate }
 import ".styles.global.css";
 
 def:pub app() -> JsxElement {
-    return <FloorPlanEditor />;
+    return <Router><Routes>
+        <Route path="/login" element={<Login />} />
+        <Route path="/signup" element={<Signup />} />
+        <Route path="/" element={<FloorPlanEditor />} />
+        <Route path="*" element={<Navigate to="/" replace={True} />} />
+    </Routes></Router>;
 }
